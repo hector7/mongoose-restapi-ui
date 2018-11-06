@@ -1,14 +1,15 @@
-import { Model, SchemaType, Document } from 'mongoose';
+import { Model, SchemaType, Document, Types } from 'mongoose';
+const { ObjectId } = Types
 import { Router, Request } from 'express'
 import { EventEmitter } from 'events';
 
-function isNumber(val) {
+function isNumber(val): boolean {
     return !isNaN(val)
 }
-function isInteger(val) {
+function isInteger(val): boolean {
     return /^\d+$/.test(val);
 }
-function parseNumberFx(el) {
+function parseNumberFx(el): number {
     let res = parseFloat(el)
     if (isInteger(el))
         res = parseInt(el, 10)
@@ -31,7 +32,7 @@ const getType = (type: string): string => {
     }
 }
 
-const transformPaths = (paths) => {
+function transformPaths(paths): [Path] {
     let pathsWithObject = paths.filter(el => el.name.indexOf('.') >= 0)
     let pathsWithoutObject = paths.filter(el => el.name.indexOf('.') < 0)
     let newObjects = []
@@ -58,8 +59,27 @@ const transformPaths = (paths) => {
     })
     return pathsWithoutObject.concat(newObjects)
 }
+type ObjectPath = FieldPath | {
+    complex: true,
+    name: string,
+    type: 'Object',
+    children: [Path]
+}
+type ArrayPath = FieldPath | {
+    complex: true,
+    name: string,
+    type: 'Array',
+    label: string,
+    children: [Path]
+}
+type FieldPath = {
+    name: string,
+    type: 'Number' | 'String' | 'Boolean' | 'ObjectId',
+    required: boolean
+}
+type Path = ObjectPath | ArrayPath | FieldPath
 
-function getModelProperties(schema) {
+function getModelProperties(schema): [Path] {
     return transformPaths(Object.keys(schema.paths).map((key) => {
         const type = schema.paths[key].constructor.name
         if (type === 'DocumentArray') {
@@ -73,8 +93,16 @@ function getModelProperties(schema) {
                 children: getModelProperties(schema.paths[key].schema)
             }
         }
+        if (type === 'ObjectId' && schema.paths[key].options.ref !== undefined) {
+            return {
+                name: key,
+                type: 'Ref',
+                to: schema.paths[key].options.ref
+            }
+        }
         return {
             name: key,
+            auto: schema.paths[key].options.auto,
             type: getType(schema.paths[key].constructor.name),
             required: schema.requiredPaths(true).indexOf(key) >= 0
         };
@@ -93,7 +121,7 @@ const defaultOptions = {
         callback(null, true)
     }
 }
-type ServeOptions = {
+export type ServeOptions = {
     name?: string,
     hasAddPermission?: (Request, Document, HasPermissionCallback) => void,
     hasUpdatePermission?: (Request, Document, HasPermissionCallback) => void,
@@ -102,7 +130,20 @@ type ServeOptions = {
 type InfoModel = {
     name: string,
     route: string,
-    paths: any
+    paths: [Path]
+}
+function replaceObjectIds(paths: [Path], object): void {
+    paths.forEach(path => {
+        if (path.type === 'Array')
+            object[path.name].forEach(subEl => {
+                replaceObjectIds(path.children, subEl)
+            })
+        if (typeof (object[path.name] === 'string')) {
+            if (path.type === 'ObjectId') {
+                object[path.name] = ObjectId(object[path.name])
+            }
+        }
+    })
 }
 export default function (router: Router, route: string, model: Model<any>, userOptions?: ServeOptions): { infoModel: InfoModel, emitter: EventEmitter } {
     const emitter = new EventEmitter()
@@ -185,6 +226,7 @@ export default function (router: Router, route: string, model: Model<any>, userO
     });
     router.post(`${route}`, (req, res) => {
         let item = new model(req.body)
+        replaceObjectIds(paths, item)
         options.hasAddPermission(req, item, (err, hasPermission, message) => {
             if (err) return res.status(500).send(err.message);
             if (hasPermission) {
@@ -212,6 +254,7 @@ export default function (router: Router, route: string, model: Model<any>, userO
                         }
                     });
                     Object.keys(req.body).forEach(key => item[key] = req.body[key]);
+                    replaceObjectIds(paths, item)
                     item.save((err, result) => {
                         if (err) return res.status(400).send(err.message);
                         res.send(result);
@@ -231,6 +274,7 @@ export default function (router: Router, route: string, model: Model<any>, userO
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     Object.keys(req.body).forEach(key => item[key] = req.body[key]);
+                    replaceObjectIds(paths, item)
                     item.save((err, result) => {
                         if (err) return res.status(400).send(err.message);
                         res.send(result);

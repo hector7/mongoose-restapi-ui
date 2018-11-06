@@ -4,7 +4,7 @@ const methodOverride = require('method-override')
 import { connect, model, Schema } from 'mongoose'
 const restify = require('express-restify-mongoose')
 const app = express()
-import { ApiRouter } from './src/router'
+import { ApiRouter } from '../src/router'
 
 app.use(bodyParser.json())
 
@@ -19,12 +19,15 @@ const provider = model('Provider', new Schema({
         type: [{ hola: { type: String, required: true, label: true }, adios: { type: String, required: true } }],
         required: true,
     },
+    customer: {
+        ref: 'Customer', type: Schema.Types.ObjectId
+    },
     comment: { type: String }
 }))
 router.setGlobalRoute('')
 router.setModel('/customer', customer)
 router.setModel('/provider', provider)
-app.use('/', router.config())
+app.use('/', router.publishUI())
 app.listen(3000, () => {
     console.log('Express server listening on port 3000')
 })

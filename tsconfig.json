@@ -2,10 +2,11 @@
     "compilerOptions": {
         "lib": ["es5", "es2015"],
         "outDir": "./built",
-        "allowJs": true,
-        "target": "es5"
+        "target": "es3"
     },
     "files": [
-        "src/router.ts"
+        "src/router.ts",
+        "src/config.ts",
+        "src/api.ts"
     ]
 }

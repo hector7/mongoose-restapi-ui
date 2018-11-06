@@ -1,12 +1,14 @@
 import { Router } from 'express'
+import { Model } from 'mongoose'
 import serveConfig from './config'
 import serveApi from './api'
 import { EventEmitter } from 'events';
+import { ServeOptions } from './api'
 
 type ApiRouter = Router & {
-    setModel?: (string, Model, ServeOptions?) => EventEmitter,
+    setModel?: (path: string, Model: Model<any>, ServeOptions?: ServeOptions) => EventEmitter,
     publishUI?: () => Router
-    setGlobalRoute?: (string) => void
+    setGlobalRoute?: (string: string) => void
 }
 
 function ApiRouter(...args): ApiRouter {
