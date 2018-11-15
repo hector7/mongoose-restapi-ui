@@ -2,6 +2,7 @@ import { Model, SchemaType, Document, Types } from 'mongoose';
 const { ObjectId } = Types
 import { Router, Request } from 'express'
 import { EventEmitter } from 'events';
+import { ObjectID } from 'bson';
 
 function isNumber(val): boolean {
     return !isNaN(val)
@@ -14,6 +15,11 @@ function parseNumberFx(el): number {
     if (isInteger(el))
         res = parseInt(el, 10)
     return res
+}
+function parseObjectId(el): ObjectID {
+    console.log(parseObjectId)
+    console.log(new ObjectId(el))
+    return new ObjectId(el)
 }
 function containsStringFx(el) {
     return {
@@ -85,12 +91,14 @@ function getModelProperties(schema): [Path] {
         if (type === 'DocumentArray') {
             const children = schema.paths[key].schema
             const labels = Object.keys(children.paths).filter(el => children.paths[el].options.label)
-            return {
-                name: key,
-                type: 'Array',
-                label: labels.length > 0 ? labels.shift() : '_id',
-                required: schema.requiredPaths(true).indexOf(key) >= 0,
-                children: getModelProperties(schema.paths[key].schema)
+            if (schema.paths[key].schema !== undefined) {
+                return {
+                    name: key,
+                    type: 'Array',
+                    label: labels.length > 0 ? labels.shift() : '_id',
+                    required: schema.requiredPaths(true).indexOf(key) >= 0,
+                    children: getModelProperties(schema.paths[key].schema)
+                }
             }
         }
         if (type === 'ObjectId' && schema.paths[key].options.ref !== undefined) {
@@ -98,6 +106,26 @@ function getModelProperties(schema): [Path] {
                 name: key,
                 type: 'Ref',
                 to: schema.paths[key].options.ref
+            }
+        }
+        if (getType(schema.paths[key].constructor.name) === 'Array') {
+            console.log(schema.paths[key].caster)
+        }
+
+        if (schema.paths[key].caster) {
+            if (schema.paths[key].caster.options.ref) {
+                return {
+                    name: key,
+                    type: 'ArrayRef',
+                    required: schema.requiredPaths(true).indexOf(key) >= 0,
+                    to: schema.paths[key].caster.options.ref
+                }
+            }
+            return {
+                name: key,
+                auto: schema.paths[key].options.auto,
+                type: 'Array'+schema.paths[key].caster.instance,
+                required: schema.requiredPaths(true).indexOf(key) >= 0
             }
         }
         return {
@@ -140,39 +168,72 @@ function replaceObjectIds(paths: [Path], object): void {
             })
         if (typeof (object[path.name] === 'string')) {
             if (path.type === 'ObjectId') {
-                object[path.name] = ObjectId(object[path.name])
+                if (object[path.name])
+                    object[path.name] = ObjectId(object[path.name])
             }
         }
     })
 }
-export default function (router: Router, route: string, model: Model<any>, userOptions?: ServeOptions): { infoModel: InfoModel, emitter: EventEmitter } {
+export default function (router: Router, route: string, model: Model<any>, models: any[], userOptions?: ServeOptions): { infoModel: InfoModel, emitter: EventEmitter } {
     const emitter = new EventEmitter()
     const options: ServeOptions = (userOptions ? { ...defaultOptions, ...userOptions } : defaultOptions);
     const paths = getModelProperties(model.schema)
     let fullPathTypes = {}
+    function getPath(paths, fullPath) {
+        const innerPaths = fullPath.split('.')
+        const firstPath = innerPaths.shift()
+        const object = paths.find(el => el.name === firstPath)
+        if (innerPaths.length === 0)
+            return object
+        return getPath(object.children, innerPaths.join('.'))
+    }
     model.schema.eachPath((path, type: CustomSchemaType) => {
         if (type.instance !== 'ObjectID')
             fullPathTypes[path] = type.instance
+        else {
+            const pathType = getPath(paths, path)
+            if (pathType.type === 'Ref')
+                return fullPathTypes[path] = pathType
+            fullPathTypes[path] = 'ObjectId'
+        }
     })
-    const fullPathNotNumber = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath] !== 'Number')
+    const fullPathNotNumber = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath] === 'String')
     const fullPathNumber = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath] === 'Number')
-    const infoModel = { name: model.modelName, route, paths }
+    const numberTransformations = fullPathNumber.length > 0 ? [{
+        $addFields: fullPathNumber.map(el => ({
+            key: `_string_${el}`,
+            value: { $toString: `$${el}` }
+        })).reduce((obj, next) => {
+            obj[next.key] = next.value
+            return obj
+        }, {})
+    }] : []
+    const numberTransformationsPaths = fullPathNumber.map(el => ({
+        key: el,
+        value: `_string_${el}`
+    })).reduce((obj, next) => {
+        obj[next.key] = next.value
+        return obj
+    }, {})
+    const infoModel = { name: model.modelName, route, paths, label: options.name, model }
 
+    let refsPaths = null
     function getItem(id: string, callback: (err: any, res: any) => void) {
-        model.findById(id, (err, result) => {
-            if (err && err.name === 'CastError') return model.findOne({ [options.name]: id }, callback);
-            callback(err, result);
-        });
+        if (ObjectId.isValid(id)) {
+            model.findById(id, callback)
+        } else {
+            model.findOne({ [options.name]: id }, callback);
+        }
     };
     type CustomSchemaType = SchemaType & { instance: string }
-    function getQuery(query) {
+    function getQuery(query): any[] {
+        const existAnyOp = Object.keys(query).some(el => el === '$any')
         function parseValue(val, fn = el => el, key = '$in') {
             if (Array.isArray(val))
                 return { [key]: val.map(fn) }
             return fn(val)
         }
-        if (Object.keys(query).length === 0) return {}
-        return {
+        const match = {
             $and: Object.keys(query).map(el => {
                 const value = query[el]
                 if (el === '$any') {
@@ -183,17 +244,33 @@ export default function (router: Router, route: string, model: Model<any>, userO
                         numbers = path => value.filter(isNumber).map(value => ({ path, value }))
                         isnumber = (<{}[]>numbers('')).length > 0
                     }
+                    const refsPathsMap = refsPaths.map(sk => ({ [`${sk.name}.${sk.targetLabel}`]: parseValue(value, containsStringFx) }))
                     if (isnumber) {
+                        const numberPaths = fullPathNumber.map(sk => ({ [numberTransformationsPaths[sk]]: parseValue(value, containsStringFx) }))
                         //const numberPaths = fullPathNumber.map(sk => (parseValue(numbers(sk), containsNumberFx, '$or')))
-                        //return {$or: stringPaths.concat(numberPaths)}
+                        return { $or: stringPaths.concat(numberPaths).concat(refsPathsMap) }
                     }
-                    return { $or: stringPaths }
+                    return { $or: stringPaths.concat(refsPathsMap) }
                 }
                 if (fullPathTypes[el] !== undefined) {
                     if (fullPathTypes[el] === 'Number') {
                         return {
                             [el]: parseValue(value, parseNumberFx)
                         }
+                    }
+                    if (fullPathTypes[el].type === 'Ref') {
+                        const targetModel = models.find(model => model.name === fullPathTypes[el].to)
+                        const targetPath = targetModel.paths.find(path => path.name === targetModel.label)
+                        if (targetPath.type === 'Number')
+                            return {
+                                [`${el}.${targetModel.label}`]: parseValue(value, parseNumberFx)
+                            }
+                        return {
+                            [`${el}.${targetModel.label}`]: parseValue(value)
+                        }
+                    }
+                    if (fullPathTypes[el] === 'ObjectId') {
+                        return { [el]: parseValue(value, parseObjectId) }
                     }
                     return {
                         [el]: parseValue(value)
@@ -202,18 +279,24 @@ export default function (router: Router, route: string, model: Model<any>, userO
                 throw (new Error(`Key ${el} not found in schema.`))
             })
         }
+        let aggregate: any[] = existAnyOp ? numberTransformations : []
+        if (Object.keys(query).length === 0) {
+            if (aggregate.length === 0)
+                return [{ $match: {} }]
+            return aggregate
+        }
+        console.log(match)
+        return [...aggregate, { $match: match }]
     }
 
     router.get(`${route}`, (req, res) => {
         new Promise((resolve, reject) => {
-            console.log(JSON.stringify(getQuery(req.query)))
-            model.find(getQuery(req.query), (err, result) => {
+            console.log(JSON.stringify(getQuery(req.query), null, 1))
+            model.aggregate(getQuery(req.query), (err, result) => {
                 if (err) return reject(err)
-
                 resolve(result);
             });
         }).then(result => res.send(result)).catch(error => {
-            console.error(error)
             res.status(400).send(error.message)
         })
     });
@@ -231,7 +314,7 @@ export default function (router: Router, route: string, model: Model<any>, userO
             if (err) return res.status(500).send(err.message);
             if (hasPermission) {
                 item.save((err, result) => {
-                    if (err) return res.status(500).send(err.message);
+                    if (err) return res.status(400).send(err.message);
                     res.status(201).send(result);
                     emitter.emit('add', result)
                 });

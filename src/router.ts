@@ -1,13 +1,13 @@
 import { Router } from 'express'
 import { Model } from 'mongoose'
-import serveConfig from './config'
+import { RequestHandler } from 'express'
 import serveApi from './api'
 import { EventEmitter } from 'events';
 import { ServeOptions } from './api'
 
 type ApiRouter = Router & {
     setModel?: (path: string, Model: Model<any>, ServeOptions?: ServeOptions) => EventEmitter,
-    publishUI?: () => Router
+    publishUiTree?: () => RequestHandler
     setGlobalRoute?: (string: string) => void
 }
 
@@ -19,15 +19,15 @@ function ApiRouter(...args): ApiRouter {
         globalRoute = path
     }
     router.setModel = (route, model, serveOptions) => {
-        const { infoModel, emitter } = serveApi(router, route, model, serveOptions)
+        const { infoModel, emitter } = serveApi(router, route, model, models, serveOptions)
         infoModel.route = `${globalRoute}${route}`
         models.push(infoModel)
         return emitter
     }
-    router.publishUI = (uiRouter?: Router) => {
-        const r = uiRouter ? uiRouter : router
-        serveConfig(r, models)
-        return r
+    router.publishUiTree = () => {
+        return (req, res) => {
+            res.send(models)
+        }
     }
 
     return <ApiRouter>router
