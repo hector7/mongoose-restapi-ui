@@ -5,6 +5,7 @@
   "main": "built/router.js",
   "scripts": {
     "start": "ts-node ./demo/index.ts",
+    "prepublishOnly": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Hector Ribes",
