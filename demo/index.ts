@@ -9,8 +9,15 @@ app.use(bodyParser.json())
 connect('mongodb://localhost:27017/database')
 const router = ApiRouter()
 const customer = model('Customer', new Schema({
+    complex: {
+        name: String,
+        number: Number
+    },
     name: { type: String, required: true },
     comment: { type: String },
+    arraycomment: [{ type: String }],
+    arrayint: [{ type: Number }],
+    arrayDate: [{ type: Date }],
     dateField: { type: Date }
 }))
 const provider = model('Provider', new Schema({

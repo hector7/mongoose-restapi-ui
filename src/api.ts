@@ -17,8 +17,6 @@ function parseNumberFx(el): number {
     return res
 }
 function parseObjectId(el): ObjectID {
-    console.log(parseObjectId)
-    console.log(new ObjectId(el))
     return new ObjectId(el)
 }
 function containsStringFx(el) {
@@ -107,9 +105,6 @@ function getModelProperties(schema): [Path] {
                 type: 'Ref',
                 to: schema.paths[key].options.ref
             }
-        }
-        if (getType(schema.paths[key].constructor.name) === 'Array') {
-            console.log(schema.paths[key].caster)
         }
 
         if (schema.paths[key].caster) {
@@ -244,13 +239,12 @@ export default function (router: Router, route: string, model: Model<any>, model
                         numbers = path => value.filter(isNumber).map(value => ({ path, value }))
                         isnumber = (<{}[]>numbers('')).length > 0
                     }
-                    const refsPathsMap = refsPaths.map(sk => ({ [`${sk.name}.${sk.targetLabel}`]: parseValue(value, containsStringFx) }))
                     if (isnumber) {
                         const numberPaths = fullPathNumber.map(sk => ({ [numberTransformationsPaths[sk]]: parseValue(value, containsStringFx) }))
                         //const numberPaths = fullPathNumber.map(sk => (parseValue(numbers(sk), containsNumberFx, '$or')))
-                        return { $or: stringPaths.concat(numberPaths).concat(refsPathsMap) }
+                        return { $or: stringPaths.concat(numberPaths) }
                     }
-                    return { $or: stringPaths.concat(refsPathsMap) }
+                    return { $or: stringPaths }
                 }
                 if (fullPathTypes[el] !== undefined) {
                     if (fullPathTypes[el] === 'Number') {
@@ -285,13 +279,11 @@ export default function (router: Router, route: string, model: Model<any>, model
                 return [{ $match: {} }]
             return aggregate
         }
-        console.log(match)
         return [...aggregate, { $match: match }]
     }
 
     router.get(`${route}`, (req, res) => {
         new Promise((resolve, reject) => {
-            console.log(JSON.stringify(getQuery(req.query), null, 1))
             model.aggregate(getQuery(req.query), (err, result) => {
                 if (err) return reject(err)
                 resolve(result);
