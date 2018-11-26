@@ -1,6 +1,6 @@
 {
   "name": "mongoose-restapi-ui",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "",
   "main": "built/router.js",
   "scripts": {
@@ -23,7 +23,7 @@
     "typescript": "^3.1.3"
   },
   "repository": {
-      "type": "git",
-      "url": "https://github.com/hector7/mongoose-restapi.git"
+    "type": "git",
+    "url": "https://github.com/hector7/mongoose-restapi.git"
   }
 }
