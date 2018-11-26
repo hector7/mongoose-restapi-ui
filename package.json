@@ -1,11 +1,11 @@
 {
   "name": "mongoose-restapi-ui",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "",
   "main": "built/router.js",
   "scripts": {
     "start": "ts-node ./demo/index.ts",
-    "prepublishOnly": "tsc",
+    "prepublishOnly": "tsc --declaration",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Hector Ribes",
