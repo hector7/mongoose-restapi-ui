@@ -3,18 +3,19 @@
 # Check https://circleci.com/docs/2.0/language-javascript/ for more details
 #
 version: 2
+defaults:
+  working_directory: ~/repo
 jobs:
-  build:
+  test:
+    <<: *defaults
     docker:
       # specify the version you desire here
-      - image: circleci/node:7.10
+      - image: circleci/node:8.9.1
       
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
       - image: circleci/mongo:4.0.0
-
-    working_directory: ~/repo
 
     steps:
       - checkout
@@ -32,7 +33,35 @@ jobs:
           paths:
             - node_modules
           key: v1-dependencies-{{ checksum "package.json" }}
-        
-      # run tests!
-      - run: npm test
+      - run:
+        name: Run tests
+        command: npm test
+      - persist_to_workspace:
+          root: ~/repo
+          paths: .
 
+  deploy:
+    <<: *defaults
+    docker:
+      - image: circleci/node:8.9.1
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          name: Authenticate with registry
+          command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/repo/.npmrc
+      - run:
+          name: Publish package
+          command: npm publish
+
+workflows:
+  version: 2
+  test-deploy:
+    jobs:
+      - test
+      - deploy:
+          requires:
+            - test
+          filters:
+            branches:
+              only: master
