@@ -31,7 +31,7 @@ const provider = model('Provider', new Schema({
     comment: { type: String }
 }))
 router.setGlobalRoute('')
-router.setModel('/customer', customer)
+router.setModel('/customer', customer, {name: 'comment'})
 router.setModel('/provider', provider)
 app.use('/', router)
 app.get('/tree', router.publishUiTree())
