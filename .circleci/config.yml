@@ -3,11 +3,10 @@
 # Check https://circleci.com/docs/2.0/language-javascript/ for more details
 #
 version: 2
-defaults:
-  working_directory: ~/repo
+
 jobs:
   test:
-    <<: *defaults
+    working_directory: ~/repo
     docker:
       # specify the version you desire here
       - image: circleci/node:8.9.1
@@ -41,7 +40,7 @@ jobs:
           paths: .
 
   deploy:
-    <<: *defaults
+    working_directory: ~/repo
     docker:
       - image: circleci/node:8.9.1
     steps:
