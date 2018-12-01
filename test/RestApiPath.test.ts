@@ -13,7 +13,7 @@ class RestApiPathTest {
         const r = Router()
         var model = mongoose.model('x', new mongoose.Schema({}))
         var ra = new RestApiPath(r, '', model, {})
-        ra.router.should.equal(r)
+        ra.router
         ra.route.should.equal('')
         ra.model.should.equal(model)
         ra.options.name.should.equal('name')
