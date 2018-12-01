@@ -6,19 +6,30 @@
   "scripts": {
     "start": "ts-node ./demo/index.ts",
     "prepublishOnly": "tsc --declaration",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "pretest": "tsc",
+    "test": "nyc mocha",
+    "watch": "mocha-typescript-watch",
+    "prepare": "tsc"
   },
   "author": "Hector Ribes",
   "license": "ISC",
   "dependencies": {
     "@types/express": "^4.16.0",
+    "express": "^4.16.4",
     "mongoose": "^4.0.0",
-    "express": "^4.16.4"
+    "query-string": "^6.2.0"
   },
   "devDependencies": {
+    "@types/chai": "^4.1.7",
+    "@types/mocha": "^5.2.5",
     "@types/mongoose": "^5.2.19",
+    "chai": "^4.2.0",
+    "chai-http": "^4.2.0",
     "method-override": "^3.0.0",
-    "npx": "^10.2.0",
+    "mocha": "^5.2.0",
+    "mocha-typescript": "^1.1.17",
+    "nyc": "^13.1.0",
+    "q": "^1.5.1",
     "ts-node": "^7.0.1",
     "typescript": "^3.1.3"
   },

@@ -1,9 +1,9 @@
 import { Router } from 'express'
 import { Model } from 'mongoose'
 import { RequestHandler } from 'express'
-import serveApi from './api'
+import serveApi from './controllers/model'
 import { EventEmitter } from 'events';
-import { ServeOptions } from './api'
+
 
 type ApiRouter = Router & {
     setModel?: (path: string, Model: Model<any>, ServeOptions?: ServeOptions) => EventEmitter,
@@ -12,7 +12,7 @@ type ApiRouter = Router & {
 }
 
 function ApiRouter(...args): ApiRouter {
-    let models = []
+    let models = {}
     const router: ApiRouter = Router(...args)
     let globalRoute = ''
     router.setGlobalRoute = (path: string) => {
@@ -21,7 +21,7 @@ function ApiRouter(...args): ApiRouter {
     router.setModel = (route, model, serveOptions) => {
         const { infoModel, emitter } = serveApi(router, route, model, models, serveOptions)
         infoModel.route = `${globalRoute}${route}`
-        models.push(infoModel)
+        models[infoModel.name] = infoModel
         return emitter
     }
     router.publishUiTree = () => {
