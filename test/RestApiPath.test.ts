@@ -1,10 +1,11 @@
 import { suite, test } from "mocha-typescript";
 
 import RestApiPath from '../src/models/RestApiPath'
-import { Router, RequestHandler, IRouter, IRouterMatcher } from 'express';
-import { PathParams } from "express-serve-static-core";
+import { Router } from 'express';
 const mongoose = require("mongoose");
 
+let chai = require('chai')
+chai.should();
 
 @suite
 class RestApiPathTest {
@@ -13,7 +14,7 @@ class RestApiPathTest {
         const r = Router()
         var model = mongoose.model('x', new mongoose.Schema({}))
         var ra = new RestApiPath(r, '', model, {})
-        ra.router
+        ra.router.should.equal(r)
         ra.route.should.equal('')
         ra.model.should.equal(model)
         ra.options.name.should.equal('name')
