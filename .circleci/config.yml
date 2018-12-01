@@ -34,10 +34,12 @@ jobs:
       - run:
           name: Run tests
           command: npm test
+      - run:
+          name: Configure coveralls
+          command: echo "$COVERALLS_REPO_TOKEN" > .coveralls.yml
       - persist_to_workspace:
           root: ~/repo
           paths: .
-      - run: bundle exec rake coveralls:push
 
   deploy:
     working_directory: ~/repo
