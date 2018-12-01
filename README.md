@@ -1,5 +1,7 @@
 # Mongoose API Generator with UI embedded
 
+[![CircleCI](https://circleci.com/gh/hector7/mongoose-restapi-ui.svg?style=svg)](https://circleci.com/gh/hector7/mongoose-restapi-ui)
+
 This package provides a Rest API for your mongoose models, with the following endpoints:
 
   - `GET /model` (with querystring for each path, with additional parameters: `$any`: any colum)
@@ -46,6 +48,13 @@ Use react component [mongoose-restapi-ui-component](https://www.npmjs.com/packag
 
 
 ## API
+Default object is an extended express Router, please initialize as express Router.
+```js
+import ApiRouter from 'mongoose-restapi-ui'
+const router = ApiRouter()
+```
+
+This object has the same properties as router, with other ones:
 - `setGlobalRoute(path: string)`: Switch for nexts models that their api starts in path `path`.
 - `setModel(route: string, model: mongoose.Model [, options])`:
     Set model `model` on path `route` from the router.
@@ -62,5 +71,4 @@ Use react component [mongoose-restapi-ui-component](https://www.npmjs.com/packag
 - Sort parameter on GET options
 - Pagination
 - API rest self documented
-- Tested package
 - UI permissions on users and roles
