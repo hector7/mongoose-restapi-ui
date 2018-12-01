@@ -37,6 +37,9 @@ jobs:
       - run:
           name: Configure coveralls
           command: echo "$COVERALLS_REPO_TOKEN" > .coveralls.yml
+      - run:
+          name: Call coveralls
+          command: coveralls
       - persist_to_workspace:
           root: ~/repo
           paths: .
