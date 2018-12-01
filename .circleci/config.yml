@@ -15,8 +15,6 @@ jobs:
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
       - image: circleci/mongo:4.0.0
-    post:
-      - bundle exec rake coveralls:push
     steps:
       - checkout
 
@@ -39,6 +37,7 @@ jobs:
       - persist_to_workspace:
           root: ~/repo
           paths: .
+      - coveralls: bundle exec rake coveralls:push
 
   deploy:
     working_directory: ~/repo
