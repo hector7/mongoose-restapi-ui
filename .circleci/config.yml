@@ -37,7 +37,7 @@ jobs:
       - persist_to_workspace:
           root: ~/repo
           paths: .
-      - coveralls: bundle exec rake coveralls:push
+      - run: bundle exec rake coveralls:push
 
   deploy:
     working_directory: ~/repo
