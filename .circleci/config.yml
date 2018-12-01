@@ -15,7 +15,8 @@ jobs:
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
       - image: circleci/mongo:4.0.0
-
+    post:
+      - bundle exec rake coveralls:push
     steps:
       - checkout
 
@@ -64,3 +65,6 @@ workflows:
           filters:
             branches:
               only: master
+general:
+  artifacts:
+    - "coverage"
