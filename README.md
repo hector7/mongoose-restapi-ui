@@ -62,26 +62,26 @@ This object has the same properties as router, with other ones:
     <th>Description</th>
   </tr>
   <tr>
-    <td>`setGlobalRoute(path)`</td>
-    <td>`path`: string</td>
-    <td>witch for nexts models that their api starts in path `path`.</td>
+    <td><code>setGlobalRoute(path)</code></td>
+    <td><code>path</code>: string</td>
+    <td>witch for nexts models that their api starts in path <code>path</code>.</td>
   </tr>
   <tr>
-    <td>`setGlobalRoutesetModel(route, model [, options])`</td>
-    <td>`route`: string<br/>`model`: mongoose.Model<br/>`options`: ServeOptions</td>
-    <td>Set model `model` on path `route` from the router. Generates GET, POST, PUT, PATCH and DELETE methods.</td>
+    <td><code>setGlobalRoutesetModel(route, model [, options])</code></td>
+    <td><code>route</code>: string<br/><code>model</code>: mongoose.Model<br/><code>options</code>: <code>ServeOptions</code></td>
+    <td>Set model <code>model</code> on path <code>route</code> from the router. Generates GET, POST, PUT, PATCH and DELETE methods.</td>
   </tr>
   <tr>
-    <td>`ServeOptions`</td>
-    <td>{<br/>`name`: string<br/>`hasAddPermission`: RequestPermission<br/>`hasUpdatePermission`: RequestPermission<br/>`hasDeletePermission`: RequestPermission<br/>}</td>
-    <td>Switch path `name` as the name label for UI purpose as complex objects.</td>
+    <td><code>ServeOptions</code></td>
+    <td>{<br/><code>name</code>: string<br/><code>hasAddPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
+    <td>Switch path <code>name</code> as the name label for UI purpose as complex objects.</td>
   </tr>
   <tr>
-    <td>`RequestPermission(error, hasPermission, reason?)`</td>
-    <td>`error`: Error<br/>`hasPermission`: Boolean<br/>`reason`?: string</td>
+    <td><code>RequestPermission(error, hasPermission, reason?)</code></td>
+    <td><code>error</code>: Error<br/><code>hasPermission</code>: Boolean<br/><code>reason</code>?: string</td>
     <td>Will be called in order to custom permissions.
-    Will be called second callback parameter with `true` or `false` as result of permission check.
-    If there are provided the third parameter of callback and `false` are provided as result, will be sended it as custom statusText with status 403.</td>
+    Will be called second callback parameter with <code>true</code> or <code>false</code> as result of permission check.
+    If there are provided the third parameter of callback and <code>false</code> are provided as result, will be sended it as custom statusText with status 403.</td>
   </tr>
 </table>
     
