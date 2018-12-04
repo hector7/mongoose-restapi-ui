@@ -84,8 +84,6 @@ class Query {
         return { _id: { $in: docs.map(el => el._id) } }
     }
     static getAnyIdsStep(model: Model<any>, ctx: CtxType, val, callback: (err: Error, query?: any) => void) {
-        if (Array.isArray(val.$any))
-            return callback(new Error('$any must be a single value'))
         const query = Query.matchAny(ctx, val.$any)
         if (query.type !== 'match') {
             return model.aggregate([ctx.convertStep, { $match: query.query }]).exec((err, docs) => {

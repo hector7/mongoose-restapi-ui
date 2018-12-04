@@ -1,6 +1,6 @@
 # Mongoose API Generator with UI embedded
 
-[![CircleCI](https://circleci.com/gh/hector7/mongoose-restapi-ui.svg?style=svg)](https://circleci.com/gh/hector7/mongoose-restapi-ui)
+[![npm version](https://img.shields.io/npm/v/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.com/package/mongoose-restapi-ui) [![Build Status](https://circleci.com/gh/hector7/mongoose-restapi-ui.svg?style=svg)](https://circleci.com/gh/hector7/mongoose-restapi-ui) [![NPM Status](http://img.shields.io/npm/dm/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.org/package/mongoose-restapi-ui) [![Donate](https://img.shields.io/badge/donate-paypal-blue.svg?style=flat-square)](https://paypal.me/hrg0) 
 
 This package provides a Rest API for your mongoose models, with the following endpoints:
 
@@ -59,13 +59,14 @@ This object has the same properties as router, with other ones:
 - `setModel(route: string, model: mongoose.Model [, options])`:
     Set model `model` on path `route` from the router.
     Generates GET, POST, PUT, PATCH and DELETE methods.
-    Options:
-        - `name`: `string`
-            Switch path `name` as the name label for UI purpose as complex objects.
-        - `hasAddPermission` / `hasUpdatePermission` / `hasDeletePermission`: `(Request, MongooseDocument, (err, bool, string?)=>void)`
-            Will be called in order to custom permissions.
-            Will be called second callback parameter with `true` or `false` as result of permission check.
-            If there are provided the third parameter of callback and `false` are provided as result, will be sended it as custom statusText with status 403.
+
+`setModel`.`Options`:
+- `name`: `string`
+    Switch path `name` as the name label for UI purpose as complex objects.
+- `hasAddPermission` / `hasUpdatePermission` / `hasDeletePermission`: `(Request, MongooseDocument, (err, bool, string?)=>void)`
+    Will be called in order to custom permissions.
+    Will be called second callback parameter with `true` or `false` as result of permission check.
+    If there are provided the third parameter of callback and `false` are provided as result, will be sended it as custom statusText with status 403.
 
 ### Next features
 - Sort parameter on GET options

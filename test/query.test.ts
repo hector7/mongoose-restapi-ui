@@ -1,8 +1,8 @@
-import { suite, test } from "mocha-typescript";
+import "mocha-typescript";
 import getQuery, { CtxType } from '../src/models/query'
 import '../src/defintions/model'
 import mongoose = require("mongoose");
-import { Model, Schema, Document, Types } from 'mongoose'
+import { Schema, Document, Types } from 'mongoose'
 
 
 const CUSTOMER = 'Customer'
@@ -35,34 +35,32 @@ const providerSchema = new Schema({
 type ICustomerModel = ICustomer & Document
 type IProviderModel = IProvider & Document
 
-@suite
-class SimpleQueryTest {
-    private timeout: (number) => void
-    public static date: Date = new Date()
-    public static objid = new Types.ObjectId('12a456789012345678901234')
+describe('SimpleQueryTest', () => {
+    const date: Date = new Date()
+    const objid = new Types.ObjectId('12a456789012345678901234')
     //store test data
-    public static customerData: ICustomer[] = [{
+    var customerData: Partial<ICustomerModel>[] = [{
         name: 'hector',
         number: 1,
         boolean: true,
-        objectid: SimpleQueryTest.objid
+        objectid: objid
     }, {
         name: 'jose',
         number: 2,
         boolean: true
     }, {
         name: 'Alice',
-        number: 1,
-        date: SimpleQueryTest.date
+        number: 543210,
+        date: date
     }]
 
     //the Customer model
-    public static Customer: mongoose.Model<ICustomerModel>;
+    var Customer: mongoose.Model<ICustomerModel>;
     //the Provider model
-    public static Provider: mongoose.Model<IProviderModel>;
+    var Provider: mongoose.Model<IProviderModel>;
 
-    public static connection: mongoose.Connection
-    public static CustomerCtx: CtxType = {
+    var connection: mongoose.Connection
+    const CustomerCtx: CtxType = {
         fullPathTypes: {
             name: {
                 type: 'String'
@@ -112,7 +110,7 @@ class SimpleQueryTest {
             }
         }
     }
-    public static ProviderCtx: CtxType = {
+    const ProviderCtx: CtxType = {
         fullPathTypes: {
             ref: {
                 type: 'Ref',
@@ -135,443 +133,278 @@ class SimpleQueryTest {
         }
     }
 
-    public static connect(callback) {
+    const connect = (callback) => {
         //connect to mongoose and create model
         const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_simple";
-        SimpleQueryTest.connection = mongoose.createConnection(MONGODB_CONNECTION);
-        SimpleQueryTest.Customer = SimpleQueryTest.connection.model<ICustomerModel>(CUSTOMER, customerSchema);
-        SimpleQueryTest.Provider = SimpleQueryTest.connection.model<IProviderModel>(PROVIDER, providerSchema);
-        SimpleQueryTest.Customer.find(callback)
+        connection = mongoose.createConnection(MONGODB_CONNECTION);
+        Customer = connection.model<ICustomerModel>(CUSTOMER, customerSchema);
+        Provider = connection.model<IProviderModel>(PROVIDER, providerSchema);
+        Customer.find(callback)
     }
-    public static before(done) {
+    before((done) => {
+        console.log('before')
         //use q promises
         global.Promise = require("q").Promise;
 
         //use q library for mongoose promise
         mongoose.Promise = global.Promise;
 
-        SimpleQueryTest.connect((err) => {
+        connect((err) => {
             if (err) return done(err)
             let chai = require("chai");
             chai.should();
             //require chai and use should() assertions
-            SimpleQueryTest.Customer.insertMany(SimpleQueryTest.customerData, (error, customerDocs) => {
+            Customer.insertMany(customerData, (error, customerDocs) => {
                 if (error) return done(error)
-                SimpleQueryTest.Provider.insertMany(customerDocs.map((el: ICustomerModel) => ({ ref: el._id })), (error) => {
+                customerData = customerDocs
+                Provider.insertMany(customerDocs.map((el: ICustomerModel) => ({ ref: el._id })), (error) => {
                     done(error)
                 })
             })
         })
-    }
-    public static after(done) {
-        SimpleQueryTest.Customer.remove((error) => {
+    })
+    after(function (done) {
+        this.timeout(10000)
+        Customer.remove((error) => {
             if (error) return done(error)
-            SimpleQueryTest.Provider.remove((error) => {
+            Provider.remove((error) => {
                 if (error) return done(error)
-                SimpleQueryTest.connection.close((error) => {
-                    done(error)
-                })
+                connection.close().then(() => done()).catch(done)
             })
         })
-    }
-    @test("Find by string")
-    public findByString(done) {
-        const query = {
-            name: 'hector'
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('hector');
-            done()
-        })
-    }
-    @test("Find by number")
-    public findByNumber(done) {
-        const query = {
-            number: '1'
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('Alice');
-            done()
-        })
-    }
-    @test("Find by boolean")
-    public findByBool(done) {
-        const query = {
-            boolean: 'true'
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('jose');
-            done()
-        })
-    }
-    @test("Find by date")
-    public findByDate(done) {
-        const query = {
-            date: JSON.stringify(SimpleQueryTest.date).slice(1, -1)
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('Alice');
-            done()
-        })
-    }
-    @test("Find by object id")
-    public findByObjectId(done) {
-        const query = {
-            objectid: JSON.parse(JSON.stringify(SimpleQueryTest.objid))
-        }
+    })
 
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('hector');
-            done()
-        })
-    }
-
-    @test("Find by ArrayString")
-    public findByArrayString(done) {
-        const query = {
-            name: ['hector', 'jose']
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('jose');
-            done()
-        })
-    }
-    @test("Find by ArrayNumber")
-    public findByArrayNumber(done) {
-        const query = {
-            number: ['1', '3']
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('Alice');
-            done()
-        })
-    }
-    @test("Find by Array boolean")
-    public findByArrayBool(done) {
-        const query = {
-            boolean: ['true']
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('jose');
-            done()
-        })
-    }
-    @test("Find by Array date")
-    public findByArrayDate(done) {
-        const query = {
-            date: [JSON.stringify(SimpleQueryTest.date).slice(1, -1)]
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('Alice');
-            done()
-        })
-    }
-    @test("Find by Array object id")
-    public findByArrayObjectId(done) {
-        const query = {
-            objectid: [JSON.parse(JSON.stringify(SimpleQueryTest.objid))]
-        }
-
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('hector');
-            done()
-        })
-    }
-    @test("Find by Array ref")
-    public findByArrayRef(done) {
-        const query = {
-            ref: 'hector'
-        }
+    function getModels() {
         const models = {
             [CUSTOMER]: {
                 name: CUSTOMER,
                 route: '',
-                paths: Object.keys(SimpleQueryTest.CustomerCtx.fullPathTypes).map(name => ({
+                paths: Object.keys(CustomerCtx.fullPathTypes).map(name => ({
                     name,
-                    type: SimpleQueryTest.CustomerCtx[name],
+                    type: CustomerCtx[name],
                     required: false
                 })),
                 label: 'name',
-                model: SimpleQueryTest.Customer
+                model: Customer
             },
             [PROVIDER]: {
                 name: PROVIDER,
                 route: '',
-                paths: Object.keys(SimpleQueryTest.ProviderCtx.fullPathTypes).map(name => ({
+                paths: Object.keys(ProviderCtx.fullPathTypes).map(name => ({
                     name,
-                    type: SimpleQueryTest.ProviderCtx[name],
+                    type: ProviderCtx[name],
                     required: false
                 })),
                 label: 'name',
-                model: SimpleQueryTest.Customer
+                model: Customer
             }
         }
-        getQuery(models, SimpleQueryTest.Provider, SimpleQueryTest.ProviderCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            SimpleQueryTest.Customer.findById(docs[0].ref, (err, res) => {
+        return models
+    }
+
+    function createSimpleTest(title, info: 'Customer' | 'Provider', query) {
+        it(title, (done) => {
+            const collection = info === 'Customer' ? Customer : Provider
+            const ctx = info === 'Customer' ? CustomerCtx : ProviderCtx
+            getQuery({}, collection, ctx, query, (err, docs) => {
                 if (err) return done(err)
-                res.name.should.equal('hector')
+                docs.should.exist;
+                const results = customerData.filter(el => {
+                    let equal = true
+                    Object.keys(query).forEach(key => {
+                        if (equal) {
+                            if (!el[key]) {
+                                equal = false
+                            } else {
+                                var map = (el) => el.toString()
+                                if (key === 'date') {
+                                    map = el => JSON.stringify(el)
+                                }
+
+                                if (Array.isArray(query[key])) {
+                                    equal = query[key].filter(subel => map(subel) === map(el[key])).length > 0
+                                } else {
+                                    equal = (map(el[key]) === map(query[key]))
+                                }
+                            }
+                        }
+                    })
+                    return equal
+                })
+                docs.length.should.equal(results.length)
+                docs.forEach((doc, key) => {
+                    doc._id.toString().should.equal(results[key]._id.toString())
+                })
                 done()
             })
         })
     }
-    @test("Find by any string")
-    public findByAnyString(done) {
-        const query = {
-            $any: 'hector'
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('hector');
-            done()
+    function createAnyTest(title, info: 'Customer', value) {
+        it(title, (done) => {
+            const collection = info === 'Customer' ? Customer : Provider
+            const ctx = info === 'Customer' ? CustomerCtx : ProviderCtx
+            getQuery({}, collection, ctx, { $any: value }, (err, docs) => {
+                if (err) return done(err)
+                docs.should.exist;
+                const results = customerData.filter(el => {
+                    return Object.keys(ctx.fullPathTypes).filter(key => {
+                        if (!el[key]) {
+                            return false
+                        } else {
+                            var map = (el) => el.toString()
+                            if (key === 'date') {
+                                map = el => JSON.stringify(el)
+                            }
+                            return map(el[key]).indexOf(value) >= 0
+                        }
+                    }).length > 0
+                })
+                docs.length.should.equal(results.length)
+                docs.forEach((doc, key) => {
+                    doc._id.toString().should.equal(results[key]._id.toString())
+                })
+                done()
+            })
         })
     }
-    @test("Find by any array string")
-    public findByAnyArrayString(done) {
-        const query = {
-            $any: ['hector', 'jose']
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(null)
-            return done('must be unreachable this line')
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('jose');
-            done()
+    function createRefTest(title, info: 'Provider', ref) {
+        it(title, (done) => {
+            const collection = Provider
+            const ctx = ProviderCtx
+            getQuery(getModels(), collection, ctx, { ref }, (err, docs) => {
+                if (err) return done(err)
+                docs.should.exist;
+                const results = customerData.filter(el => {
+                    if (Array.isArray(ref))
+                        return ref.indexOf(el.name) >= 0
+                    return el.name === ref
+                })
+                docs.length.should.equal(results.length)
+                docs.forEach((doc, key) => {
+                    doc.ref.toString().should.equal(results[key]._id.toString())
+                })
+                done()
+            })
         })
     }
-    @test("Find by any number")
-    public findByAnyNumber(done) {
-        const query = {
-            $any: '1'
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('Alice');
-            done()
-        })
-    }
-    @test("Find by any - boolean")
-    public findByAnyBool(done) {
-        const query = {
-            $any: 'true'
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(2);
-            docs[0].name.should.equal('hector');
-            docs[1].name.should.equal('jose');
-            done()
-        })
-    }
-    @test("Find by any - date")
-    public findByAnyDate(done) {
-        const query = {
-            $any: SimpleQueryTest.date.getFullYear().toString()
-        }
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('Alice');
-            done()
-        })
-    }
-    @test("Find by any object id")
-    public findByObjectIdAny(done) {
-        const query = {
-            $any: JSON.parse(JSON.stringify(SimpleQueryTest.objid))
-        }
-
-        getQuery({}, SimpleQueryTest.Customer, SimpleQueryTest.CustomerCtx, query, (err, docs) => {
-            if (err) return done(err)
-            docs.should.exist;
-            docs.length.should.equal(1);
-            docs[0].name.should.equal('hector');
-            done()
-        })
-    }
-    @test("Find by ref and close connection")
-    public findByRefWillFail(done) {
+    createSimpleTest('find by string', 'Customer', { name: 'hector' })
+    createSimpleTest('find by number', 'Customer', { number: '1' })
+    createSimpleTest('find by boolean', 'Customer', { boolean: 'true' })
+    createSimpleTest('find by date', 'Customer', { date: JSON.stringify(date).slice(1, -1) })
+    createSimpleTest('find by object id', 'Customer', { objectid: JSON.parse(JSON.stringify(objid)) })
+    createSimpleTest('find by array string', 'Customer', { name: ['hector', 'jose'] })
+    createSimpleTest('find by array number', 'Customer', { number: ['1', '3'] })
+    createSimpleTest('find by array boolean', 'Customer', { boolean: ['true'] })
+    createSimpleTest('find by array date', 'Customer', { date: [JSON.stringify(date).slice(1, -1)] })
+    createSimpleTest('find by array object id', 'Customer', { objectid: [JSON.parse(JSON.stringify(objid))] })
+    createAnyTest('find by any string', 'Customer', 'hector')
+    createAnyTest('find by any number', 'Customer', '1')
+    createAnyTest('find by any long number', 'Customer', '54321')
+    createAnyTest('find by any boolean', 'Customer', 'true')
+    createAnyTest('find by any date', 'Customer', date.getFullYear().toString())
+    createAnyTest('find by any objectid', 'Customer', JSON.parse(JSON.stringify(objid)))
+    createRefTest('find by ref', 'Provider', 'hector')
+    createRefTest('find by array ref', 'Provider', ['hector'])
+    it('Find by ref with error', (done) => {
         const query = {
             ref: 'hector'
         }
+        const originalModels = getModels()
         const models = {
+            ...originalModels,
             [CUSTOMER]: {
-                name: CUSTOMER,
-                route: '',
-                paths: Object.keys(SimpleQueryTest.CustomerCtx.fullPathTypes).map(name => ({
-                    name,
-                    type: SimpleQueryTest.CustomerCtx[name],
-                    required: false
-                })),
-                label: 'name',
-                model: SimpleQueryTest.Customer
-            },
-            [PROVIDER]: {
-                name: PROVIDER,
-                route: '',
-                paths: Object.keys(SimpleQueryTest.ProviderCtx.fullPathTypes).map(name => ({
-                    name,
-                    type: SimpleQueryTest.ProviderCtx[name],
-                    required: false
-                })),
-                label: 'name',
-                model: SimpleQueryTest.Customer
+                ...originalModels[CUSTOMER],
+                model: {
+                    find: (a, b, callback) => callback('some error')
+                }
             }
         }
-        const callback = (finalError) => {
-            SimpleQueryTest.connect((err) => {
-                if (err) return done(err)
-                done(finalError)
-            })
-        }
-        getQuery(models, SimpleQueryTest.Provider, SimpleQueryTest.ProviderCtx, query, (err, docs) => {
-            if (err) return callback(null)
-            callback('this must be unreachable...')
+        getQuery(models, Provider, ProviderCtx, query, (err, docs) => {
+            err.should.be.equal('some error')
+            if (err) return done(null)
+            done('this line must be unreachable')
         })
-        SimpleQueryTest.connection.close((err) => {
-            if (err) return callback(err)
-        })
-    }
-    @test("Find by $any string and close connection")
-    public findByAnyWillFail(done) {
+    })
+    it('Find by $any string with error', (done) => {
         const query = {
             $any: 'hector'
         }
-        const models = {
-            [CUSTOMER]: {
-                name: CUSTOMER,
-                route: '',
-                paths: Object.keys(SimpleQueryTest.CustomerCtx.fullPathTypes).map(name => ({
-                    name,
-                    type: SimpleQueryTest.CustomerCtx[name],
-                    required: false
-                })),
-                label: 'name',
-                model: SimpleQueryTest.Customer
-            },
-            [PROVIDER]: {
-                name: PROVIDER,
-                route: '',
-                paths: Object.keys(SimpleQueryTest.ProviderCtx.fullPathTypes).map(name => ({
-                    name,
-                    type: SimpleQueryTest.ProviderCtx[name],
-                    required: false
-                })),
-                label: 'name',
-                model: SimpleQueryTest.Customer
-            }
+        const fakeCustomer = mongoose.model(CUSTOMER + 'FAKE', customerSchema)
+        fakeCustomer.find = (conditions: any, projection?: any, callback?: (err: any, res?: Document[]) => void): mongoose.DocumentQuery<any, any> => {
+            callback('some error')
+            return null
         }
-        const callback = (finalError) => {
-            SimpleQueryTest.connect((err) => {
-                if (err) return done(err)
-                done(finalError)
-            })
+        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
+            err.should.be.equal('some error')
+            if (err) return done(null)
+            done('this line must be unreachable')
+        })
+    })
+    it('Find by no ref and no any and close connection', (done) => {
+        const query = {
+            name: 'hector'
         }
-        getQuery(models, SimpleQueryTest.Provider, SimpleQueryTest.ProviderCtx, query, (err, docs) => {
-            if (err) return callback(null)
-            callback('this must be unreachable...')
+        const fakeCustomer = mongoose.model(CUSTOMER + 'FAKE', customerSchema)
+        fakeCustomer.find = (conditions: any, callback?: (err: any, res?: Document[]) => void): mongoose.DocumentQuery<any, any> => {
+            callback('some error')
+            return null
+        }
+        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
+            err.should.be.equal('some error')
+            if (err) return done(null)
+            done('this line must be unreachable')
         })
-        SimpleQueryTest.connection.close((err) => {
-            if (err) return callback(err)
+    })
+    it('Find by no query with error', (done) => {
+        const query = {}
+        const fakeCustomer = mongoose.model(CUSTOMER + 'FAKE', customerSchema)
+        fakeCustomer.find = (conditions: any, callback?: (err: any, res?: Document[]) => void): mongoose.DocumentQuery<any, any> => {
+            callback('some error')
+            return null
+        }
+        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
+            err.should.be.equal('some error')
+            if (err) return done(null)
+            done('this line must be unreachable')
         })
-    }
-    @test("Find by $any number and close connection")
-    public findByAnyNumberWillFail(done) {
+    })
+    it('Find by $any number and close connection', (done) => {
         const query = {
             $any: '1'
         }
-        const models = {
-            [CUSTOMER]: {
-                name: CUSTOMER,
-                route: '',
-                paths: Object.keys(SimpleQueryTest.CustomerCtx.fullPathTypes).map(name => ({
-                    name,
-                    type: SimpleQueryTest.CustomerCtx[name],
-                    required: false
-                })),
-                label: 'name',
-                model: SimpleQueryTest.Customer
-            },
-            [PROVIDER]: {
-                name: PROVIDER,
-                route: '',
-                paths: Object.keys(SimpleQueryTest.ProviderCtx.fullPathTypes).map(name => ({
-                    name,
-                    type: SimpleQueryTest.ProviderCtx[name],
-                    required: false
-                })),
-                label: 'name',
-                model: SimpleQueryTest.Customer
+
+        const fakeCustomer = mongoose.model(CUSTOMER + 'FAKE', customerSchema)
+        const originalAggregate = fakeCustomer.aggregate
+        fakeCustomer.aggregate = (...args: any): any => {
+            const result = originalAggregate(...args)
+            result.exec = (callback)=>{
+                callback('some error', [])
             }
+            return result
         }
-        const callback = (finalError) => {
-            SimpleQueryTest.connect((err) => {
-                if (err) return done(err)
-                done(finalError)
-            })
+        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
+            err.should.be.equal('some error')
+            if (err) return done(null)
+            done('this line must be unreachable')
+        })
+    })
+    it('Find by any array string', (done) => {
+        const query = {
+            $any: ['hector', 'jose']
         }
-        getQuery(models, SimpleQueryTest.Provider, SimpleQueryTest.ProviderCtx, query, (err, docs) => {
-            if (err) return callback(null)
-            callback('this must be unreachable...')
+        getQuery({}, Customer, CustomerCtx, query, (err, docs) => {
+            if (err) return done(null)
+            return done('must be unreachable this line')
         })
-        SimpleQueryTest.connection.close((err) => {
-            if (err) return callback(err)
-        })
-    }
-    @test("Find by type not contemplated not in schema")
-    public findByNotPathWillFail(done) {
+    })
+    it('Find by type not contemplated not in schema', (done) => {
         const query = {
             $any2: '1'
         }
-        getQuery({}, SimpleQueryTest.Provider, SimpleQueryTest.ProviderCtx, query, (err, docs) => {
+        getQuery({}, Provider, ProviderCtx, query, (err, docs) => {
             if (err) return done(null)
             done('this must be unreachable...')
         })
-    }
-}
+    })
+})
+
