@@ -55,18 +55,36 @@ const router = ApiRouter()
 ```
 
 This object has the same properties as router, with other ones:
-- `setGlobalRoute(path: string)`: Switch for nexts models that their api starts in path `path`.
-- `setModel(route: string, model: mongoose.Model [, options])`:
-    Set model `model` on path `route` from the router.
-    Generates GET, POST, PUT, PATCH and DELETE methods.
-
-`setModel`.`Options`:
-- `name`: `string`
-    Switch path `name` as the name label for UI purpose as complex objects.
-- `hasAddPermission` / `hasUpdatePermission` / `hasDeletePermission`: `(Request, MongooseDocument, (err, bool, string?)=>void)`
-    Will be called in order to custom permissions.
+<table>
+  <tr>
+    <th>Name</th>
+    <th>Type</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>`setGlobalRoute(path)`</td>
+    <td>`path`: string</td>
+    <td>witch for nexts models that their api starts in path `path`.</td>
+  </tr>
+  <tr>
+    <td>`setGlobalRoutesetModel(route, model [, options])`</td>
+    <td>`route`: string<br/>`model`: mongoose.Model<br/>`options`: ServeOptions</td>
+    <td>Set model `model` on path `route` from the router. Generates GET, POST, PUT, PATCH and DELETE methods.</td>
+  </tr>
+  <tr>
+    <td>`ServeOptions`</td>
+    <td>{<br/>`name`: string<br/>`hasAddPermission`: RequestPermission<br/>`hasUpdatePermission`: RequestPermission<br/>`hasDeletePermission`: RequestPermission<br/>}</td>
+    <td>Switch path `name` as the name label for UI purpose as complex objects.</td>
+  </tr>
+  <tr>
+    <td>`RequestPermission(error, hasPermission, reason?)`</td>
+    <td>`error`: Error<br/>`hasPermission`: Boolean<br/>`reason`?: string</td>
+    <td>Will be called in order to custom permissions.
     Will be called second callback parameter with `true` or `false` as result of permission check.
-    If there are provided the third parameter of callback and `false` are provided as result, will be sended it as custom statusText with status 403.
+    If there are provided the third parameter of callback and `false` are provided as result, will be sended it as custom statusText with status 403.</td>
+  </tr>
+</table>
+    
 
 ### Next features
 - Sort parameter on GET options
