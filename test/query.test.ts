@@ -1,6 +1,6 @@
 import "mocha-typescript";
 import getQuery, { CtxType } from '../src/models/query'
-import '../src/defintions/model'
+import '../src/definitions/model'
 import mongoose = require("mongoose");
 import { Schema, Document, Types } from 'mongoose'
 
