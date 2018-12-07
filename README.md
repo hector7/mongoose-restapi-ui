@@ -1,5 +1,7 @@
 # Mongoose API Generator with UI embedded
 
+[![npm version](https://img.shields.io/npm/v/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.com/package/mongoose-restapi-ui) [![Build Status](https://circleci.com/gh/hector7/mongoose-restapi-ui.svg?style=svg)](https://circleci.com/gh/hector7/mongoose-restapi-ui) [![NPM Status](http://img.shields.io/npm/dm/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.org/package/mongoose-restapi-ui) [![Coverage Status](https://coveralls.io/repos/github/hector7/mongoose-restapi-ui/badge.svg?branch=master)](https://coveralls.io/github/hector7/mongoose-restapi-ui?branch=master) [![Donate](https://img.shields.io/badge/donate-paypal-blue.svg?style=flat-square)](https://paypal.me/hrg0) 
+
 This package provides a Rest API for your mongoose models, with the following endpoints:
 
   - `GET /model` (with querystring for each path, with additional parameters: `$any`: any colum)
@@ -46,21 +48,46 @@ Use react component [mongoose-restapi-ui-component](https://www.npmjs.com/packag
 
 
 ## API
-- `setGlobalRoute(path: string)`: Switch for nexts models that their api starts in path `path`.
-- `setModel(route: string, model: mongoose.Model [, options])`:
-    Set model `model` on path `route` from the router.
-    Generates GET, POST, PUT, PATCH and DELETE methods.
-    Options:
-        - `name`: `string`
-            Switch path `name` as the name label for UI purpose as complex objects.
-        - `hasAddPermission` / `hasUpdatePermission` / `hasDeletePermission`: `(Request, MongooseDocument, (err, bool, string?)=>void)`
-            Will be called in order to custom permissions.
-            Will be called second callback parameter with `true` or `false` as result of permission check.
-            If there are provided the third parameter of callback and `false` are provided as result, will be sended it as custom statusText with status 403.
+Default object is an extended express Router, please initialize as express Router.
+```js
+import ApiRouter from 'mongoose-restapi-ui'
+const router = ApiRouter()
+```
+
+This object has the same properties as router, with other ones:
+<table>
+  <tr>
+    <th>Name</th>
+    <th>Type</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>setGlobalRoute(path)</code></td>
+    <td><code>path</code>: string</td>
+    <td>witch for nexts models that their api starts in path <code>path</code>.</td>
+  </tr>
+  <tr>
+    <td><code>setGlobalRoutesetModel(route, model [, options])</code></td>
+    <td><code>route</code>: string<br/><code>model</code>: mongoose.Model<br/><code>options</code>: <code>ServeOptions</code></td>
+    <td>Set model <code>model</code> on path <code>route</code> from the router. Generates GET, POST, PUT, PATCH and DELETE methods.</td>
+  </tr>
+  <tr>
+    <td><code>ServeOptions</code></td>
+    <td>{<br/><code>name</code>: string<br/><code>hasAddPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
+    <td>Switch path <code>name</code> as the name label for UI purpose as complex objects.</td>
+  </tr>
+  <tr>
+    <td><code>RequestPermission(error, hasPermission, reason?)</code></td>
+    <td><code>error</code>: Error<br/><code>hasPermission</code>: Boolean<br/><code>reason</code>?: string</td>
+    <td>Will be called in order to custom permissions.
+    Will be called second callback parameter with <code>true</code> or <code>false</code> as result of permission check.
+    If there are provided the third parameter of callback and <code>false</code> are provided as result, will be sended it as custom statusText with status 403.</td>
+  </tr>
+</table>
+    
 
 ### Next features
 - Sort parameter on GET options
 - Pagination
 - API rest self documented
-- Tested package
 - UI permissions on users and roles

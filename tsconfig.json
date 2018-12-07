@@ -1,12 +1,7 @@
 {
     "compilerOptions": {
-        "lib": ["es5", "es2015"],
-        "outDir": "./built",
-        "target": "es3"
-    },
-    "files": [
-        "src/router.ts",
-        "src/config.ts",
-        "src/api.ts"
-    ]
+        "lib": ["es5", "es2015", "dom"],
+        "target": "es5",
+        "experimentalDecorators": true
+    }
 }

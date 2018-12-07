@@ -1,2 +1,5 @@
 /node_modules
-/built
+*.js
+/.nyc_output
+*.d.ts
+/coverage
