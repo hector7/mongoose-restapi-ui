@@ -19,9 +19,6 @@ jobs:
       - checkout
 
       # Download and cache dependencies
-      - run:
-          name: Configure coveralls
-          command: echo "$COVERALLS_REPO_TOKEN" > .coveralls.yml
       - restore_cache:
           keys:
           - v1-dependencies-{{ checksum "package.json" }}
@@ -37,6 +34,9 @@ jobs:
       - run:
           name: Run tests
           command: npm test
+      - run:
+          name: Push to coveralls
+          command: npm run coveralls
       - persist_to_workspace:
           root: ~/repo
           paths: .
