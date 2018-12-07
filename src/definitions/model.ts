@@ -1,9 +1,12 @@
+import { Request } from 'express'
+import { Document } from 'mongoose';
+
 type RequiredAttrsPath = {
     name: string,
     required: boolean
 }
 
-type ObjectPath = RequiredAttrsPath & {
+export type ObjectPath = RequiredAttrsPath & {
     complex: true,
     name: string,
     type: 'Object',
@@ -18,16 +21,22 @@ type ArrayPath = RequiredAttrsPath & {
 type FieldPath = RequiredAttrsPath & {
     type: 'Number' | 'String' | 'Boolean' | 'ObjectId',
 }
-type Path = FieldPath | ObjectPath | ArrayPath 
+export type Path = FieldPath | ObjectPath | ArrayPath
 
-type HasPermissionCallback = (Error, boolean, string?) => void
-type ServeOptions = {
+export type HasPermissionCallback = (error: Error, hasPermission: boolean, reason?: string) => void
+
+type GetPermissionCallback = (error: Error, query: any) => void
+type EditPermision = (req: Request, doc: Document, callback: HasPermissionCallback) => void
+export type ServeOptions = {
+    MAX_RESULTS?: number,
     name?: string,
-    hasAddPermission?: (Request, Document, HasPermissionCallback) => void,
-    hasUpdatePermission?: (Request, Document, HasPermissionCallback) => void,
-    hasDeletePermission?: (Request, Document, HasPermissionCallback) => void,
+    getPermissionStep?: (callback: GetPermissionCallback) => void,
+    hasEditPermission?: EditPermision,
+    hasAddPermission?: EditPermision,
+    hasUpdatePermission?: EditPermision,
+    hasDeletePermission?: EditPermision,
 }
-type InfoModel = {
+export type InfoModel = {
     name: string,
     label: string,
     route: string,
@@ -35,4 +44,4 @@ type InfoModel = {
     model: any
 }
 
-type FullPathTypes = { type: string } | { type: 'Ref' | 'ArrayRef', to: string } | {}
+export type FullPathTypes = { type: string } | { type: 'Ref' | 'ArrayRef', to: string } | {}

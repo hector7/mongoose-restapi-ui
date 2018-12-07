@@ -1,6 +1,7 @@
-import { Model } from 'mongoose'
-import '../definitions/model'
+import { Model, DocumentQuery } from 'mongoose'
+import { FullPathTypes, InfoModel } from '../definitions/model'
 import * as utils from '../utils'
+import { Cursor } from 'mongodb';
 
 export type CtxType = {
     convertStep: { $addFields: { [key: string]: any } }
@@ -84,15 +85,17 @@ class Query {
     static mapAnyResultStep(docs) {
         return { _id: { $in: docs.map(el => el._id) } }
     }
-    static getAnyIdsStep(model: Model<any>, ctx: CtxType, val, callback: (err: Error, query?: any) => void) {
+    static getAnyIdsStep(model: Model<any>, ctx: CtxType, val, prevFilter: any, callback: (err: Error, query?: any) => void) {
         const query = Query.matchAny(ctx, val.$any)
         if (query.type !== 'match') {
-            return model.aggregate([ctx.convertStep, { $match: query.query }]).exec((err, docs) => {
+            const match = prevFilter ? [{ $match: prevFilter }] : []
+            return model.aggregate([...match, ctx.convertStep, { $match: query.query }]).exec((err, docs) => {
                 if (err) return callback(err)
                 callback(null, Query.mapAnyResultStep(docs))
             })
         }
-        return model.find(query.query, { _id: 1 }, (err, docs) => {
+        const match = prevFilter ? { $and: [query.query, prevFilter] } : query.query
+        return model.find(match, { _id: 1 }, (err, docs) => {
             if (err) return callback(err)
             callback(null, Query.mapAnyResultStep(docs))
         })
@@ -103,6 +106,8 @@ class Query {
         const refsKeys = Object.keys(val).filter(key => ctx.refFullPaths.indexOf(key) >= 0)
         let targetDocs = []
         refsKeys.forEach(refKey => {
+            const cb = (err, docs) => {
+            }
             const targetInfoModel = models[ctx.fullPathTypes[refKey].to]
             const targetModel: Model<any> = targetInfoModel.model
             targetModel.find({ [targetInfoModel.label]: val[refKey] }, { _id: 1 }, (err, docs) => {
@@ -116,36 +121,38 @@ class Query {
 }
 
 function doQuery(model: Model<any>, ctx: CtxType, value,
-    query: any[], callback: (err: Error, docs?: any[]) => void) {
-    if (Object.keys(value).length === 0) return model.find({}, (err, res) => {
-        if(err) return callback(err)
-        callback(null, res)
-    })
+    query: any[], prevFilter: any, callback: (err: Error, docs?: DocumentQuery<any, any>) => void) {
+    if (Object.keys(value).length === 0) {
+        const query = prevFilter ? prevFilter : {}
+        return callback(null, model.find(query))
+    }
     const match = Query.getMatch(ctx, value, query)
-    model.find(match, callback)
+    if (prevFilter)
+        return callback(null, model.find({ $and: [match, prevFilter] }))
+    return callback(null, model.find(match))
 }
 
 function checkAnyOperator(model: Model<any>, ctx: CtxType, value,
-    query: any[], callback: (err: Error, docs?: any[]) => void) {
+    query: any[], prevFilter: any, callback: (err: Error, docs?: DocumentQuery<any, any>) => void) {
     if (Query.hasAnyOp(value)) {
-        return Query.getAnyIdsStep(model, ctx, value, (err, res) => {
+        return Query.getAnyIdsStep(model, ctx, value, prevFilter, (err, res) => {
             if (err) return callback(err)
-            doQuery(model, ctx, value, query.concat(res), callback)
+            doQuery(model, ctx, value, query.concat(res), prevFilter, callback)
         })
     }
-    doQuery(model, ctx, value, query, callback)
+    doQuery(model, ctx, value, query, prevFilter, callback)
 }
 
 export default (models: { [key: string]: InfoModel }, model: Model<any>,
-    ctx: CtxType, query: any, callback: (err: Error, docs?: any[]) => void) => {
+    ctx: CtxType, query: any, prevFilter: any, callback: (err: Error, cursor?: DocumentQuery<any, any>) => void) => {
     new Query()
     if (Object.keys(query).filter(key => ctx.fullPathTypes[key] === undefined && key !== '$any').length > 0)
         return callback(new Error('query has an attribute not in mongoose model.'))
     if (Query.hasAnyRef(ctx, query)) {
         return Query.getRefIdStep(models, ctx, query, (err, ids) => {
             if (err) return callback(err)
-            checkAnyOperator(model, ctx, query, ids, callback)
+            checkAnyOperator(model, ctx, query, ids, prevFilter, callback)
         })
     }
-    checkAnyOperator(model, ctx, query, [], callback)
+    checkAnyOperator(model, ctx, query, [], prevFilter, callback)
 }

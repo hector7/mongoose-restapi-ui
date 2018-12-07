@@ -76,9 +76,38 @@ class RestApiPathTest {
         objectTest.isNumber('array.number').should.equal(true)
         objectTest.setEndPoints([])
     }
+    @test "edit permission works propertly with his priority hierarchy"() {
+        const router = Router()
+        const hasEditPermission = (err, res, callback) => {
+            callback('1')
+        }
+        const hasAddPermission = (err, res, callback) => {
+            callback('2')
+        }
+        let objectTest = new RestApiPath(router, RestApiPathTest.route, RestApiPathTest.model, { hasEditPermission, hasAddPermission })
+        objectTest.options.hasAddPermission(null, null, (err, doc) => {
+            err.should.equals('2', 'add should be equal to his function provided')
+        })
+        objectTest.options.hasUpdatePermission(null, null, (err) => {
+            err.should.equals('1', 'update should be equal to edit, no provided function')
+        })
+        objectTest.options.hasDeletePermission(null, null, (err) => {
+            err.should.equals('1', 'delete should be equal to edit, no provided function')
+        })
+        let objectTest2 = new RestApiPath(router, RestApiPathTest.route, RestApiPathTest.model, { hasEditPermission, hasDeletePermission: hasAddPermission, hasUpdatePermission: hasAddPermission })
+        objectTest2.options.hasAddPermission(null, null, (err, doc) => {
+            err.should.equals('1', 'add should be equal to edit')
+        })
+        objectTest2.options.hasUpdatePermission(null, null, (err) => {
+            err.should.equals('2', 'update should be equal to his function')
+        })
+        objectTest2.options.hasDeletePermission(null, null, (err) => {
+            err.should.equals('2', 'delete should be equal to his function')
+        })
+    }
     @test "generates correct numberMapping"() {
         const newModel = mongoose.model('testTree3', new Schema({
-            _arrayNumber: [{type: Number}],
+            _arrayNumber: [{ type: Number }],
             arrayNumber: [{ type: Number }],
         }))
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, newModel, {})
@@ -132,6 +161,43 @@ class RestApiPathTest {
                 })
         })
     }
+    @test "get all objects with filter"(done) {
+        const getPermissionStep = (callback) => {
+            callback(null, { string: 'string' })
+        }
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getPermissionStep })
+        objectTest1.setEndPoints([])
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with sort"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([])
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$sortBy=hector`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
     @test "get all objects handle error"(done) {
         mock('../src/models/query', './query.error.mock')
         const RestApiPath = mock.reRequire('../src/models/RestApiPath').default
@@ -164,6 +230,26 @@ class RestApiPathTest {
                 .end((err, res) => {
                     server.close((err) => {
                         res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get an object by id with filter"(done) {
+        const getPermissionStep = (callback) => {
+            callback(null, { string: 'string2' })
+        }
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getPermissionStep })
+        objectTest1.setEndPoints([])
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}/${RestApiPathTest.id}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(404)
                         done()
                     })
                 })
@@ -223,6 +309,27 @@ class RestApiPathTest {
                 .end((err, res) => {
                     server.close((err) => {
                         res.should.have.status(403)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "check hasAddPermission message works"(done) {
+        const hasAddPermission = (req, doc, callback) => {
+            callback(null, false, 'some error')
+        }
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAddPermission })
+        objectTest1.setEndPoints([])
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .post(`${RestApiPathTest.route}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(403)
+                        //res.should.have.statusText('some error')
                         done()
                     })
                 })
@@ -300,6 +407,26 @@ class RestApiPathTest {
     public hasUpdatePermission(done) {
         const hasUpdatePermission = (req, doc, callback) => {
             callback(null, false)
+        }
+        let objectTest2 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasUpdatePermission })
+        const app2 = express()
+        objectTest2.setEndPoints([])
+        app2.use('/', objectTest2.router)
+        const server = app2.listen(3002, () => {
+            chai.request(server)
+                .put(`${RestApiPathTest.route}/${RestApiPathTest.id}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(403)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "check hasUpdatePermission message put works"(done) {
+        const hasUpdatePermission = (req, doc, callback) => {
+            callback(null, false, 'some error')
         }
         let objectTest2 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasUpdatePermission })
         const app2 = express()
@@ -429,6 +556,28 @@ class RestApiPathTest {
             })
         })
     }
+    @test "check hasUpdatePermission message patch works"(done) {
+        const hasUpdatePermission = (req, doc, callback) => {
+            callback(null, false, 'some error')
+        }
+        let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasUpdatePermission })
+        objectTest.setEndPoints([])
+        const app = express()
+        app.use('/', objectTest.router)
+        RestApiPathTest.model.findById(RestApiPathTest.id, (err, res) => {
+            const server = app.listen(3003, () => {
+                chai.request(server)
+                    .patch(`/test/${RestApiPathTest.id}`)
+                    .send('')
+                    .end((err, res) => {
+                        server.close((err) => {
+                            res.should.have.status(403)
+                            done()
+                        })
+                    })
+            })
+        })
+    }
     @test "check handle patch by no item"(done) {
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
         objectTest.setEndPoints([])
@@ -523,6 +672,28 @@ class RestApiPathTest {
     public hasDeletePermission(done) {
         const hasDeletePermission = (req, doc, callback) => {
             callback(null, false)
+        }
+        let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasDeletePermission })
+        objectTest.setEndPoints([])
+        const app = express()
+        app.use('/', objectTest.router)
+        RestApiPathTest.model.findById(RestApiPathTest.id, (err, res) => {
+            const server = app.listen(3003, () => {
+                chai.request(server)
+                    .delete(`/test/${RestApiPathTest.id}`)
+                    .send('')
+                    .end((err, res) => {
+                        server.close((err) => {
+                            res.should.have.status(403)
+                            done()
+                        })
+                    })
+            })
+        })
+    }
+    @test "check hasDeletePermission message works"(done) {
+        const hasDeletePermission = (req, doc, callback) => {
+            callback(null, false, 'some error')
         }
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasDeletePermission })
         objectTest.setEndPoints([])

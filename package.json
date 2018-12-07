@@ -9,6 +9,7 @@
     "pretest": "tsc",
     "test": "nyc mocha",
     "precoverage": "nyc report --reporter=cobertura",
+    "html": "nyc report --reporter=html",
     "coverage": "codecov coverage/coverage.json",
     "watch": "mocha-typescript-watch"
   },
@@ -39,6 +40,16 @@
     "type": "git",
     "url": "https://github.com/hector7/mongoose-restapi-ui.git"
   },
+  "keywords": [
+    "mongoose",
+    "rest",
+    "api",
+    "restapi",
+    "ui",
+    "gui",
+    "mongoose-ui",
+    "mongoose-gui"
+  ],
   "nyc": {
     "check-coverage": true,
     "per-file": true,

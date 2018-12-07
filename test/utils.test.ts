@@ -1,5 +1,6 @@
 import { suite, test } from "mocha-typescript";
 
+import { Path } from '../src/definitions/model'
 import * as Utils from '../src/utils'
 
 @suite

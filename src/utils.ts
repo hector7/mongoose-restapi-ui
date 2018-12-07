@@ -1,6 +1,8 @@
 import { Types } from 'mongoose';
 import { ObjectID } from 'bson';
 
+import { Path } from '../src/definitions/model'
+
 const { ObjectId } = Types
 export function isNumber(val: any): boolean {
     return !isNaN(val)

@@ -1,6 +1,5 @@
 import "mocha-typescript";
 import getQuery, { CtxType } from '../src/models/query'
-import '../src/definitions/model'
 import mongoose = require("mongoose");
 import { Schema, Document, Types } from 'mongoose'
 
@@ -202,40 +201,44 @@ describe('SimpleQueryTest', () => {
         return models
     }
 
-    function createSimpleTest(title, info: 'Customer' | 'Provider', query) {
+    function createSimpleTest(title, info: 'Customer' | 'Provider', query, prevFilter?: any) {
         it(title, (done) => {
             const collection = info === 'Customer' ? Customer : Provider
             const ctx = info === 'Customer' ? CustomerCtx : ProviderCtx
-            getQuery({}, collection, ctx, query, (err, docs) => {
+            getQuery({}, collection, ctx, query, prevFilter ? prevFilter : null, (err, cursor) => {
                 if (err) return done(err)
-                docs.should.exist;
-                const results = customerData.filter(el => {
-                    let equal = true
-                    Object.keys(query).forEach(key => {
-                        if (equal) {
-                            if (!el[key]) {
-                                equal = false
-                            } else {
-                                var map = (el) => el.toString()
-                                if (key === 'date') {
-                                    map = el => JSON.stringify(el)
-                                }
-
-                                if (Array.isArray(query[key])) {
-                                    equal = query[key].filter(subel => map(subel) === map(el[key])).length > 0
+                cursor.should.exist;
+                cursor.find((err, docs) => {
+                    if (err) return done(err)
+                    docs.should.exist;
+                    const results = customerData.filter(el => {
+                        let equal = true
+                        Object.keys(query).forEach(key => {
+                            if (equal) {
+                                if (!el[key]) {
+                                    equal = false
                                 } else {
-                                    equal = (map(el[key]) === map(query[key]))
+                                    var map = (el) => el.toString()
+                                    if (key === 'date') {
+                                        map = el => JSON.stringify(el)
+                                    }
+
+                                    if (Array.isArray(query[key])) {
+                                        equal = query[key].filter(subel => map(subel) === map(el[key])).length > 0
+                                    } else {
+                                        equal = (map(el[key]) === map(query[key]))
+                                    }
                                 }
                             }
-                        }
+                        })
+                        return equal
                     })
-                    return equal
+                    docs.length.should.equal(results.length)
+                    docs.forEach((doc, key) => {
+                        doc._id.toString().should.equal(results[key]._id.toString())
+                    })
+                    done()
                 })
-                docs.length.should.equal(results.length)
-                docs.forEach((doc, key) => {
-                    doc._id.toString().should.equal(results[key]._id.toString())
-                })
-                done()
             })
         })
     }
@@ -243,27 +246,31 @@ describe('SimpleQueryTest', () => {
         it(title, (done) => {
             const collection = info === 'Customer' ? Customer : Provider
             const ctx = info === 'Customer' ? CustomerCtx : ProviderCtx
-            getQuery({}, collection, ctx, { $any: value }, (err, docs) => {
+            getQuery({}, collection, ctx, { $any: value }, null, (err, cursor) => {
                 if (err) return done(err)
-                docs.should.exist;
-                const results = customerData.filter(el => {
-                    return Object.keys(ctx.fullPathTypes).filter(key => {
-                        if (!el[key]) {
-                            return false
-                        } else {
-                            var map = (el) => el.toString()
-                            if (key === 'date') {
-                                map = el => JSON.stringify(el)
+                cursor.should.exist;
+                cursor.find((err, docs) => {
+                    if (err) return done(err)
+                    docs.should.exist;
+                    const results = customerData.filter(el => {
+                        return Object.keys(ctx.fullPathTypes).filter(key => {
+                            if (!el[key]) {
+                                return false
+                            } else {
+                                var map = (el) => el.toString()
+                                if (key === 'date') {
+                                    map = el => JSON.stringify(el)
+                                }
+                                return map(el[key]).indexOf(value) >= 0
                             }
-                            return map(el[key]).indexOf(value) >= 0
-                        }
-                    }).length > 0
+                        }).length > 0
+                    })
+                    docs.length.should.equal(results.length)
+                    docs.forEach((doc, key) => {
+                        doc._id.toString().should.equal(results[key]._id.toString())
+                    })
+                    done()
                 })
-                docs.length.should.equal(results.length)
-                docs.forEach((doc, key) => {
-                    doc._id.toString().should.equal(results[key]._id.toString())
-                })
-                done()
             })
         })
     }
@@ -271,23 +278,27 @@ describe('SimpleQueryTest', () => {
         it(title, (done) => {
             const collection = Provider
             const ctx = ProviderCtx
-            getQuery(getModels(), collection, ctx, { ref }, (err, docs) => {
+            getQuery(getModels(), collection, ctx, { ref }, null, (err, cursor) => {
                 if (err) return done(err)
-                docs.should.exist;
-                const results = customerData.filter(el => {
-                    if (Array.isArray(ref))
-                        return ref.indexOf(el.name) >= 0
-                    return el.name === ref
+                cursor.should.exist;
+                cursor.find((err, docs) => {
+                    if (err) return done(err)
+                    const results = customerData.filter(el => {
+                        if (Array.isArray(ref))
+                            return ref.indexOf(el.name) >= 0
+                        return el.name === ref
+                    })
+                    docs.length.should.equal(results.length)
+                    docs.forEach((doc, key) => {
+                        doc.ref.toString().should.equal(results[key]._id.toString())
+                    })
+                    done()
                 })
-                docs.length.should.equal(results.length)
-                docs.forEach((doc, key) => {
-                    doc.ref.toString().should.equal(results[key]._id.toString())
-                })
-                done()
             })
         })
     }
     createSimpleTest('find by string', 'Customer', { name: 'hector' })
+    createSimpleTest('find by string', 'Customer', { name: 'hector' }, { name: 'hector' })
     createSimpleTest('find by number', 'Customer', { number: '1' })
     createSimpleTest('find by boolean', 'Customer', { boolean: 'true' })
     createSimpleTest('find by date', 'Customer', { date: JSON.stringify(date).slice(1, -1) })
@@ -319,7 +330,7 @@ describe('SimpleQueryTest', () => {
                 }
             }
         }
-        getQuery(models, Provider, ProviderCtx, query, (err, docs) => {
+        getQuery(models, Provider, ProviderCtx, query, null, (err, docs) => {
             err.should.be.equal('some error')
             if (err) return done(null)
             done('this line must be unreachable')
@@ -334,35 +345,7 @@ describe('SimpleQueryTest', () => {
             callback('some error')
             return null
         }
-        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
-            err.should.be.equal('some error')
-            if (err) return done(null)
-            done('this line must be unreachable')
-        })
-    })
-    it('Find by no ref and no any and close connection', (done) => {
-        const query = {
-            name: 'hector'
-        }
-        const fakeCustomer = mongoose.model(CUSTOMER + 'FAKE', customerSchema)
-        fakeCustomer.find = (conditions: any, callback?: (err: any, res?: Document[]) => void): mongoose.DocumentQuery<any, any> => {
-            callback('some error')
-            return null
-        }
-        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
-            err.should.be.equal('some error')
-            if (err) return done(null)
-            done('this line must be unreachable')
-        })
-    })
-    it('Find by no query with error', (done) => {
-        const query = {}
-        const fakeCustomer = mongoose.model(CUSTOMER + 'FAKE', customerSchema)
-        fakeCustomer.find = (conditions: any, callback?: (err: any, res?: Document[]) => void): mongoose.DocumentQuery<any, any> => {
-            callback('some error')
-            return null
-        }
-        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
+        getQuery({}, fakeCustomer, CustomerCtx, query, null, (err, docs) => {
             err.should.be.equal('some error')
             if (err) return done(null)
             done('this line must be unreachable')
@@ -377,12 +360,12 @@ describe('SimpleQueryTest', () => {
         const originalAggregate = fakeCustomer.aggregate
         fakeCustomer.aggregate = (...args: any): any => {
             const result = originalAggregate(...args)
-            result.exec = (callback)=>{
+            result.exec = (callback) => {
                 callback('some error', [])
             }
             return result
         }
-        getQuery({}, fakeCustomer, CustomerCtx, query, (err, docs) => {
+        getQuery({}, fakeCustomer, CustomerCtx, query, null, (err, docs) => {
             err.should.be.equal('some error')
             if (err) return done(null)
             done('this line must be unreachable')
@@ -392,7 +375,7 @@ describe('SimpleQueryTest', () => {
         const query = {
             $any: ['hector', 'jose']
         }
-        getQuery({}, Customer, CustomerCtx, query, (err, docs) => {
+        getQuery({}, Customer, CustomerCtx, query, null, (err, docs) => {
             if (err) return done(null)
             return done('must be unreachable this line')
         })
@@ -401,7 +384,7 @@ describe('SimpleQueryTest', () => {
         const query = {
             $any2: '1'
         }
-        getQuery({}, Provider, ProviderCtx, query, (err, docs) => {
+        getQuery({}, Provider, ProviderCtx, query, null, (err, docs) => {
             if (err) return done(null)
             done('this must be unreachable...')
         })

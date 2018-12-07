@@ -73,8 +73,11 @@ class RestApiPathTest {
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200)
-                res.body.should.be.a('array')
-                res.body.length.should.be.eql(0)
+                res.body.total_pages.should.be.eql(0)
+                res.body.count.should.be.eql(0)
+                res.body.page.should.be.eql(1)
+                res.body.results.should.be.a('array')
+                res.body.results.length.should.be.eql(0)
                 done()
             })
     }
@@ -85,8 +88,11 @@ class RestApiPathTest {
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200)
-                res.body.should.be.a('array')
-                res.body.length.should.be.eql(0)
+                res.body.total_pages.should.be.eql(0)
+                res.body.count.should.be.eql(0)
+                res.body.page.should.be.eql(1)
+                res.body.results.should.be.a('array')
+                res.body.results.length.should.be.eql(0)
                 done()
             })
     }

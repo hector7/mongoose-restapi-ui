@@ -1,5 +1,5 @@
 import { Model } from 'mongoose'
-
+import { FullPathTypes, InfoModel } from '../src/definitions/model'
 export type CtxType = {
     convertStep: { $addFields: { [key: string]: any } }
     fullPathTypes: FullPathTypes,
@@ -15,6 +15,6 @@ export type CtxType = {
 
 
 export default (models: { [key: string]: InfoModel }, model: Model<any>,
-    ctx: CtxType, query: any, callback: (err: Error, docs?: any[]) => void) => {
+    ctx: CtxType, query: any, prevQuery: any, callback: (err: Error, docs?: any[]) => void) => {
     callback(new Error('some error'))
 }

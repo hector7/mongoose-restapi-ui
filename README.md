@@ -4,7 +4,7 @@
 
 This package provides a Rest API for your mongoose models, with the following endpoints:
 
-  - `GET /model` (with querystring for each path, with additional parameters: `$any`: any colum)
+  - `GET /model` (with querystring for each path, with additional parameters: `$any`: any colum, `$sortBy`: sort by a column, `$sort`: `asc` or `desc` and `$page`: number page)
   - `GET /model/:_id`
   - `GET /model/:name` 
   - `POST /model`
@@ -67,17 +67,34 @@ This object has the same properties as router, with other ones:
     <td>witch for nexts models that their api starts in path <code>path</code>.</td>
   </tr>
   <tr>
-    <td><code>setGlobalRoutesetModel(route, model [, options])</code></td>
-    <td><code>route</code>: string<br/><code>model</code>: mongoose.Model<br/><code>options</code>: <code>ServeOptions</code></td>
-    <td>Set model <code>model</code> on path <code>route</code> from the router. Generates GET, POST, PUT, PATCH and DELETE methods.</td>
+    <td><code>setModel(route, model [, options])</code></td>
+    <td><code>route</code>: string<br/><code>model</code>: mongoose.Model<br/><code>options</code>: <code>ServeOptions</code><br/>returns <code>EventEmitter</code></td>
+    <td>Set model <code>model</code> on path <code>route</code> from the router. Generates GET, POST, PUT, PATCH and DELETE methods.
+    Returns an <code>EventEmitter</code> that emits the following events:
+    <ul>
+      <li><code>add</code>: Event that emits the new doc added to database.</li>
+      <li><code>update</code>: Event that emits the updated doc. Emits an object with keys: old: old document, new: document updated</li>
+      <li><code>delete</code>: Event that emits the deleted doc.</li>
+    </ul>
+    </td>
   </tr>
   <tr>
     <td><code>ServeOptions</code></td>
-    <td>{<br/><code>name</code>: string<br/><code>hasAddPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
+    <td>{<br/><code>name</code>: string<br/><code>getPermissionStep</code>: GetPermissionCallback<br/><code>hasAddPermission</code>: RequestPermission<br/><code>hasEditPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
     <td>Switch path <code>name</code> as the name label for UI purpose as complex objects.</td>
   </tr>
   <tr>
-    <td><code>RequestPermission(error, hasPermission, reason?)</code></td>
+    <td><code>GetPermissionCallback(err, query)</code></td>
+    <td>err: <code>Error</code><br/>query: <code>Object</code></td>
+    <td>Callback called in order to get a pre-filter query (query), for a custom permissions setup.</td>
+  </tr>
+  <tr>
+    <td><code>RequestPermission(req, doc, callback)</code></td>
+    <td>req: <code>express.Request</code><br/>doc: <code>mongoose.Document</code><br/>callback: <code>RequestPermissionCallback</code></td>
+    <td>called on interaction with an endpoint rest (post, put, patch or delete)</td>
+  </tr>
+  <tr>
+    <td><code>RequestPermissionCallback(error, hasPermission, reason?)</code></td>
     <td><code>error</code>: Error<br/><code>hasPermission</code>: Boolean<br/><code>reason</code>?: string</td>
     <td>Will be called in order to custom permissions.
     Will be called second callback parameter with <code>true</code> or <code>false</code> as result of permission check.
@@ -87,7 +104,5 @@ This object has the same properties as router, with other ones:
     
 
 ### Next features
-- Sort parameter on GET options
-- Pagination
 - API rest self documented
 - UI permissions on users and roles
