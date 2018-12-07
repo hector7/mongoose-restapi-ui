@@ -67,7 +67,7 @@ workflows:
             tags:
               only: /^v.*/
             branches:
-              only: master
+              ignore: /.*/
 general:
   artifacts:
     - "coverage"
