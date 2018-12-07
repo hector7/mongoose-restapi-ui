@@ -1,6 +1,6 @@
 # Mongoose API Generator with UI embedded
 
-[![npm version](https://img.shields.io/npm/v/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.com/package/mongoose-restapi-ui) [![Build Status](https://circleci.com/gh/hector7/mongoose-restapi-ui.svg?style=svg)](https://circleci.com/gh/hector7/mongoose-restapi-ui) [![NPM Status](http://img.shields.io/npm/dm/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.org/package/mongoose-restapi-ui) [![codecov.io](https://codecov.io/github/cainus/codecov.io/coverage.svg?branch=master)](https://codecov.io/github/cainus/codecov.io?branch=master) [![Donate](https://img.shields.io/badge/donate-paypal-blue.svg?style=flat-square)](https://paypal.me/hrg0) 
+[![npm version](https://img.shields.io/npm/v/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.com/package/mongoose-restapi-ui) [![Build Status](https://circleci.com/gh/hector7/mongoose-restapi-ui.svg?style=svg)](https://circleci.com/gh/hector7/mongoose-restapi-ui) [![NPM Status](http://img.shields.io/npm/dm/mongoose-restapi-ui.svg?style=flat-square)](https://www.npmjs.org/package/mongoose-restapi-ui) [![codecov.io](https://codecov.io/github/hector7/mongoose-restapi-ui/coverage.svg?branch=master)](https://codecov.io/github/hector7/mongoose-restapi-ui.io?branch=master) [![Donate](https://img.shields.io/badge/donate-paypal-blue.svg?style=flat-square)](https://paypal.me/hrg0) 
 
 This package provides a Rest API for your mongoose models, with the following endpoints:
 
