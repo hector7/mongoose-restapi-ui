@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { Model } from 'mongoose'
 import { RequestHandler } from 'express'
+import './definitions/model'
 import serveApi from './controllers/model'
 import { EventEmitter } from 'events';
 

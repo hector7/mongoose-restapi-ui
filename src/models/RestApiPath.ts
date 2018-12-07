@@ -1,7 +1,7 @@
 import { Model, SchemaType, Document, Types } from 'mongoose';
 import { Router, Request, Response } from 'express'
 import { EventEmitter } from 'events';
-import '../defintions/model'
+import '../definitions/model'
 import * as utils from '../utils'
 import getQuery from './query'
 

@@ -2,7 +2,7 @@
   "name": "mongoose-restapi-ui",
   "version": "1.2.3",
   "description": "",
-  "main": "built/router.js",
+  "main": "src/router.js",
   "scripts": {
     "start": "ts-node ./demo/index.ts",
     "prepublishOnly": "tsc --declaration",

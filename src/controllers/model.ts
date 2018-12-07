@@ -1,7 +1,7 @@
 import { Model } from 'mongoose';
 import { Router } from 'express'
 import { EventEmitter } from 'events';
-import '../defintions/model'
+import '../definitions/model'
 import RestApiPath from '../models/RestApiPath'
 type returnFunction = { infoModel: InfoModel, emitter: EventEmitter }
 

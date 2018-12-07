@@ -1,4 +1,5 @@
 import { Model } from 'mongoose'
+import '../definitions/model'
 import * as utils from '../utils'
 
 export type CtxType = {
