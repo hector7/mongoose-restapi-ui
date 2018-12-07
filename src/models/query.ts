@@ -137,6 +137,7 @@ function checkAnyOperator(model: Model<any>, ctx: CtxType, value,
 
 export default (models: { [key: string]: InfoModel }, model: Model<any>,
     ctx: CtxType, query: any, callback: (err: Error, docs?: any[]) => void) => {
+    new Query()
     if (Object.keys(query).filter(key => ctx.fullPathTypes[key] === undefined && key !== '$any').length > 0)
         return callback(new Error('query has an attribute not in mongoose model.'))
     if (Query.hasAnyRef(ctx, query)) {

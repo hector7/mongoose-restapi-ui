@@ -1,8 +1,7 @@
 import { Model, SchemaType, Document, Types } from 'mongoose';
-const { ObjectId } = Types
 import { Router, Request, Response } from 'express'
 import { EventEmitter } from 'events';
-import { ObjectID } from 'bson';
+import '../defintions/model'
 import * as utils from '../utils'
 import getQuery from './query'
 
@@ -22,12 +21,15 @@ const defaultOptions = {
 
 type CustomSchemaType = SchemaType & { instance: string }
 
+
+const routerWeakMap = new WeakMap()
+const optionsWeakMap = new WeakMap()
+
 export default class RestApiPath {
 
-    private _router: Router
     private _route: string
     private _model: Model<any>
-    private _options: ServeOptions
+    protected _options: ServeOptions
     private _emitter: EventEmitter
     private _paths: Path[]
     private _stringFullPaths: string[]
@@ -42,7 +44,8 @@ export default class RestApiPath {
     private _projectionStep: { $project: { [key: string]: 1 } }
     private _fullPathTypes: FullPathTypes
     constructor(router: Router, route: string, model: Model<any>, options: ServeOptions) {
-        this._router = router
+        routerWeakMap.set(this, router)
+        optionsWeakMap.set(this, (options ? { ...defaultOptions, ...options } : defaultOptions))
         this._route = route
         this._model = model
         this._options = (options ? { ...defaultOptions, ...options } : defaultOptions);
@@ -64,11 +67,11 @@ export default class RestApiPath {
     }
 
     get router(): Router {
-        return this._router
+        return routerWeakMap.get(this)
     }
 
     get options(): ServeOptions {
-        return this._options
+        return optionsWeakMap.get(this)
     }
 
     get paths(): Path[] {
@@ -272,7 +275,7 @@ export default class RestApiPath {
         return getFullPath(this.paths)
     }
 
-    private getItem(id: string, callback: (err: any, res: any) => void) {
+    public getItem(id: string, callback: (err: any, res?: any) => void) {
         this.model.findById(id, (err, res) => {
             if (err || !res) {
                 return this.model.findOne({ [this.options.name]: id }, callback)
@@ -282,15 +285,31 @@ export default class RestApiPath {
     }
 
     public setEndPoints(models) {
+        const { hasAddPermission, hasUpdatePermission, hasDeletePermission } = this.options
+        this.router.use((req, res, next) => {
+            if (req.body) return next()
+            let data = ''
+            req.on('data', (chunk) => {
+                data += chunk.toString()
+            })
+            req.on('end', () => {
+                try {
+                    req.body = JSON.parse(data)
+                    next()
+                } catch (err) {
+                    next()
+                }
+            })
+        })
         this.router.get(`${this.route}`, (req: Request, res: Response) => {
             getQuery(models, this.model, this, req.query, (err, docs) => {
-                if (err) return res.status(400).send(err.message)
+                if (err) return res.status(500).send(err.message)
                 return res.send(docs)
             })
         });
         this.router.get(`${this.route}/:id`, (req: Request, res: Response) => {
             this.getItem(req.params.id, (err, item) => {
-                if (err) return res.status(400).send(err.message);
+                if (err) return res.status(500).send(err.message);
                 if (!item) return res.sendStatus(404);
                 res.send(item);
             });
@@ -298,11 +317,11 @@ export default class RestApiPath {
         this.router.post(`${this.route}`, (req: Request, res: Response) => {
             let item = new this.model(req.body)
             utils.replaceObjectIds(this.paths, item)
-            this.options.hasAddPermission(req, item, (err, hasPermission, message) => {
+            hasAddPermission(req, item, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     item.save((err, result) => {
-                        if (err) return res.status(400).send(err.message);
+                        if (err) return res.status(500).send(err.message);
                         res.status(201).send(result);
                         this.emitter.emit('add', result)
                     });
@@ -312,11 +331,10 @@ export default class RestApiPath {
             })
         });
         this.router.put(`${this.route}/:id`, (req: Request, res: Response) => {
-            if (typeof (req.body) !== 'object') return res.status(400).send('Body must be a valid JSON')
             this.getItem(req.params.id, (err, item) => {
-                if (err) return res.status(400).send(err.message);
+                if (err) return res.status(500).send(err.message);
                 if (!item) return res.sendStatus(404);
-                this.options.hasUpdatePermission(req, item, (err, hasPermission, message) => {
+                hasUpdatePermission(req, item, (err, hasPermission, message) => {
                     if (err) return res.status(500).send(err.message);
                     if (hasPermission) {
                         this.model.schema.eachPath(path => {
@@ -327,7 +345,7 @@ export default class RestApiPath {
                         Object.keys(req.body).forEach(key => item[key] = req.body[key]);
                         utils.replaceObjectIds(this.paths, item)
                         item.save((err, result) => {
-                            if (err) return res.status(400).send(err.message);
+                            if (err) return res.status(500).send(err.message);
                             res.send(result);
                             this.emitter.emit('update', result)
                         });
@@ -339,15 +357,15 @@ export default class RestApiPath {
         });
         this.router.patch(`${this.route}/:id`, (req: Request, res: Response) => {
             this.getItem(req.params.id, (err, item) => {
-                if (err) return res.status(400).send(err.message);
+                if (err) return res.status(500).send(err.message);
                 if (!item) return res.sendStatus(404);
-                this.options.hasUpdatePermission(req, item, (err, hasPermission, message) => {
+                hasUpdatePermission(req, item, (err, hasPermission, message) => {
                     if (err) return res.status(500).send(err.message);
                     if (hasPermission) {
                         Object.keys(req.body).forEach(key => item[key] = req.body[key]);
                         utils.replaceObjectIds(this.paths, item)
                         item.save((err, result) => {
-                            if (err) return res.status(400).send(err.message);
+                            if (err) return res.status(500).send(err.message);
                             res.send(result);
                             this.emitter.emit('update', result)
                         });
@@ -362,7 +380,7 @@ export default class RestApiPath {
             this.getItem(req.params.id, (err, item) => {
                 if (err) return res.status(400).send(err.message);
                 if (!item) return res.sendStatus(404);
-                this.options.hasDeletePermission(req, item, (err, hasPermission, message) => {
+                hasDeletePermission(req, item, (err, hasPermission, message) => {
                     if (err) return res.status(500).send(err.message);
                     if (hasPermission) {
                         this.model.deleteOne({ _id: item._id }, (err) => {

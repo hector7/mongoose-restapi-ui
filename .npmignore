@@ -27,3 +27,6 @@ tsconfig.json
 !/node_modules/*
 !/.circleci/*
 !/.nyc_output/*
+
+
+/coverage
