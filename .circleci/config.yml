@@ -35,8 +35,8 @@ jobs:
           name: Run tests
           command: npm test
       - run:
-          name: Push to coveralls
-          command: npm run coveralls
+          name: Push to codecov
+          command: npm run coverage
       - persist_to_workspace:
           root: ~/repo
           paths: .
