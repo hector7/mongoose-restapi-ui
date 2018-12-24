@@ -6,6 +6,7 @@ import { Schema, Document, Types } from 'mongoose'
 
 const CUSTOMER = 'Customer'
 const PROVIDER = 'Provider'
+const MULTIPROVIDER = 'MultiProvider'
 
 type ICustomer = {
 
@@ -17,6 +18,10 @@ type ICustomer = {
 }
 type IProvider = {
     ref: Types.ObjectId
+}
+type IMultiProvider = {
+    ref: Types.ObjectId
+    ref2: Types.ObjectId
 }
 
 const customerSchema = new Schema({
@@ -30,9 +35,14 @@ const customerSchema = new Schema({
 const providerSchema = new Schema({
     ref: { type: Schema.Types.ObjectId, ref: CUSTOMER }
 })
+const multiProviderSchema = new Schema({
+    ref: { type: Schema.Types.ObjectId, ref: CUSTOMER },
+    ref2: { type: Schema.Types.ObjectId, ref: CUSTOMER }
+})
 
 type ICustomerModel = ICustomer & Document
 type IProviderModel = IProvider & Document
+type IMultiProviderModel = IMultiProvider & Document
 
 describe('SimpleQueryTest', () => {
     const date: Date = new Date()
@@ -57,6 +67,8 @@ describe('SimpleQueryTest', () => {
     var Customer: mongoose.Model<ICustomerModel>;
     //the Provider model
     var Provider: mongoose.Model<IProviderModel>;
+    //the Provider model
+    var MultiProvider: mongoose.Model<IMultiProviderModel>;
 
     var connection: mongoose.Connection
     const CustomerCtx: CtxType = {
@@ -131,6 +143,32 @@ describe('SimpleQueryTest', () => {
             }
         }
     }
+    const MultiProviderCtx: CtxType = {
+        fullPathTypes: {
+            ref: {
+                type: 'Ref',
+                to: CUSTOMER
+            },
+            ref2: {
+                type: 'Ref',
+                to: CUSTOMER
+            }
+        },
+        isNumber: (field) => {
+            return false
+        },
+        numberFullPaths: [],
+        refFullPaths: ['ref', 'ref2'],
+        dateFullPaths: [],
+        objectIdFullPaths: [],
+        booleanFullPaths: [],
+        stringFullPaths: [],
+        transformationMap: {},
+        convertStep: {
+            $addFields: {
+            }
+        }
+    }
 
     const connect = (callback) => {
         //connect to mongoose and create model
@@ -138,10 +176,10 @@ describe('SimpleQueryTest', () => {
         connection = mongoose.createConnection(MONGODB_CONNECTION);
         Customer = connection.model<ICustomerModel>(CUSTOMER, customerSchema);
         Provider = connection.model<IProviderModel>(PROVIDER, providerSchema);
+        MultiProvider = connection.model<IMultiProviderModel>(MULTIPROVIDER, multiProviderSchema);
         Customer.find(callback)
     }
     before((done) => {
-        console.log('before')
         //use q promises
         global.Promise = require("q").Promise;
 
@@ -195,7 +233,18 @@ describe('SimpleQueryTest', () => {
                     required: false
                 })),
                 label: 'name',
-                model: Customer
+                model: Provider
+            },
+            [MULTIPROVIDER]: {
+                name: MULTIPROVIDER,
+                route: '',
+                paths: Object.keys(MultiProviderCtx.fullPathTypes).map(name => ({
+                    name,
+                    type: MultiProviderCtx[name],
+                    required: false
+                })),
+                label: 'name',
+                model: MultiProvider
             }
         }
         return models
@@ -336,6 +385,25 @@ describe('SimpleQueryTest', () => {
             done('this line must be unreachable')
         })
     })
+    it('Find by $any with prevFilter', (done) => {
+        const query = {
+            $any: '2'
+        }
+        getQuery(getModels(), Customer, CustomerCtx, query, { name: 'hector' }, (err, docs) => {
+            if (err) return done(err)
+            done()
+        })
+    })
+    it('Find by multi refs', (done) => {
+        const query = {
+            ref: 'hector',
+            ref2: 'hector'
+        }
+        getQuery(getModels(), MultiProvider, MultiProviderCtx, query, { name: 'hector' }, (err, docs) => {
+            if (err) return done(err)
+            done()
+        })
+    })
     it('Find by $any string with error', (done) => {
         const query = {
             $any: 'hector'
@@ -358,7 +426,7 @@ describe('SimpleQueryTest', () => {
 
         const fakeCustomer = mongoose.model(CUSTOMER + 'FAKE', customerSchema)
         const originalAggregate = fakeCustomer.aggregate
-        fakeCustomer.aggregate = (...args: any): any => {
+        fakeCustomer.aggregate = (...args: any[]): any => {
             const result = originalAggregate(...args)
             result.exec = (callback) => {
                 callback('some error', [])

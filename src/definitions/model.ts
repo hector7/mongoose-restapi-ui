@@ -1,5 +1,6 @@
 import { Request } from 'express'
 import { Document } from 'mongoose';
+import { IPermission } from '../models/permissionSchema';
 
 type RequiredAttrsPath = {
     name: string,
@@ -25,12 +26,25 @@ export type Path = FieldPath | ObjectPath | ArrayPath
 
 export type HasPermissionCallback = (error: Error, hasPermission: boolean, reason?: string) => void
 
+export type UserRequest = Request & {
+    user: Document
+}
+
+export type EditRequest<T extends Document> = UserRequest & {
+    doc: T
+}
+export type PermissionRequest<T extends Document> = EditRequest<T> & {
+    perm: IPermission,
+    permission: string
+}
+
 type GetPermissionCallback = (error: Error, query: any) => void
 type EditPermision = (req: Request, doc: Document, callback: HasPermissionCallback) => void
 export type ServeOptions = {
     MAX_RESULTS?: number,
     name?: string,
-    getPermissionStep?: (callback: GetPermissionCallback) => void,
+    getPermissionStep?: (req: Request, callback: GetPermissionCallback) => void,
+    hasAdminPermission?: EditPermision,
     hasEditPermission?: EditPermision,
     hasAddPermission?: EditPermision,
     hasUpdatePermission?: EditPermision,

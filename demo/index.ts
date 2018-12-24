@@ -1,15 +1,15 @@
 const express = require('express')
 const bodyParser = require('body-parser')
-import { connect, model, Schema } from 'mongoose'
+import mongoose = require('mongoose')
 const app = express()
 import { ApiRouter } from '../src/router'
 
 app.use(bodyParser.json())
 
-connect('mongodb://localhost:27017/database')
+mongoose.connect('mongodb://localhost:27017/database')
 const router = ApiRouter()
 
-const customer = model('Customer', new Schema({
+const customer = mongoose.model('Customer', new mongoose.Schema({
     complex: {
         name: String,
         number: Number
@@ -21,19 +21,20 @@ const customer = model('Customer', new Schema({
     arrayDate: [{ type: Date }],
     dateField: { type: Date }
 }))
-const provider= model('Provider', new Schema({
+const provider = mongoose.model('Provider', new mongoose.Schema({
     name: {
         type: [{ hola: { type: String, required: true, label: true }, adios: { type: String, required: true } }],
         required: true,
     },
     customer: [{
-        ref: 'Customer', type: Schema.Types.ObjectId
+        ref: 'Customer', type: mongoose.Schema.Types.ObjectId
     }],
     comment: { type: String }
 }))
 
 router.setGlobalRoute('')
-router.setModel('/customer', customer, {name: 'name'})
+router.setPermissionsModel(mongoose)
+router.setModel('/customer', customer, { name: 'name' })
 router.setModel('/provider', provider)
 app.use('/', router)
 app.get('/tree', router.publishUiTree())

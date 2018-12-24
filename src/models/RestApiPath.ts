@@ -1,16 +1,17 @@
-import { Model, SchemaType, Document, DocumentQuery } from 'mongoose';
+import { Model, SchemaType, Document, DocumentQuery, Types } from 'mongoose';
 import { Router, Request, Response } from 'express'
 import { EventEmitter } from 'events';
-import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath } from '../definitions/model'
+import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath, PermissionRequest, EditRequest, UserRequest } from '../definitions/model'
 import * as utils from '../utils'
 import getQuery from './query'
-import { Cursor } from 'mongodb';
+import { IPermission } from './permissionSchema';
+import { callbackify } from 'util';
 
 
 const defaultOptions = {
     MAX_RESULTS: 100,
     name: 'name',
-    getPermissionStep: (callback) => {
+    getPermissionStep: (req: UserRequest, callback) => {
         callback(null, null)
     },
     hasAddPermission: (req: Request, item: Document, callback: HasPermissionCallback) => {
@@ -20,6 +21,9 @@ const defaultOptions = {
         callback(null, true)
     },
     hasDeletePermission: (req: Request, item: Document, callback: HasPermissionCallback) => {
+        callback(null, true)
+    },
+    hasAdminPermission: (req: Request, item: Document, callback: HasPermissionCallback) => {
         callback(null, true)
     }
 }
@@ -43,10 +47,10 @@ function getOptions(options: ServeOptions) {
     return defaultOptions
 }
 
-export default class RestApiPath {
+export default class RestApiPath<T extends Document> {
 
     private _route: string
-    private _model: Model<any>
+    private _model: Model<T>
     private _options: ServeOptions
     private _emitter: EventEmitter
     private _paths: Path[]
@@ -61,7 +65,7 @@ export default class RestApiPath {
     private _transformationMap: { [key: string]: string } = {}
     private _projectionStep: { $project: { [key: string]: 1 } }
     private _fullPathTypes: FullPathTypes
-    constructor(router: Router, route: string, model: Model<any>, options: ServeOptions) {
+    constructor(router: Router, route: string, model: Model<T>, options: ServeOptions) {
         routerWeakMap.set(this, router)
         this._options = getOptions(options)
         this._route = route
@@ -79,7 +83,7 @@ export default class RestApiPath {
         return this._emitter
     }
 
-    get model(): Model<any> {
+    get model(): Model<T> {
         return this._model
     }
 
@@ -235,15 +239,17 @@ export default class RestApiPath {
             if (type === 'DocumentArray') {
                 const children = schema.paths[key].schema
                 const labels = Object.keys(children.paths).filter(el => children.paths[el].options.label)
-                if (schema.paths[key].schema !== undefined) {
-                    return {
-                        name: key,
-                        type: 'Array',
-                        label: labels.length > 0 ? labels.shift() : '_id',
-                        required: schema.requiredPaths(true).indexOf(key) >= 0,
-                        children: this.getModelProperties(schema.paths[key].schema)
-                    }
+                // TODO Check if documentarray ever has schema object
+                //if (schema.paths[key].schema !== undefined) {
+                return {
+                    name: key,
+                    type: 'Array',
+                    complex: true,
+                    label: labels.length > 0 ? labels.shift() : '_id',
+                    required: schema.requiredPaths(true).indexOf(key) >= 0,
+                    children: this.getModelProperties(schema.paths[key].schema)
                 }
+                //}
             }
             if (type === 'ObjectId' && schema.paths[key].options.ref !== undefined) {
                 return {
@@ -296,26 +302,117 @@ export default class RestApiPath {
         return getFullPath(this.paths)
     }
 
-    public getItem(id: string, callback: (err: any, res?: any) => void) {
-        this.options.getPermissionStep((err, query) => {
-            if (err) return callback(err)
-            const cb = (err, res) => {
-                if (err) return callback(err)
-                if (query === null) return callback(null, res)
-                this.model.findOne({ _id: res._id }).findOne(query, callback)
+    public getItem(id: string, callback: (err?: Error, res?: T) => void): void {
+        this.model.findById(id, (err, res) => {
+            if (err || !res) {
+                return this.model.findOne({ [this.options.name]: id }, callback)
             }
-            return this.model.findById(id, (err, res) => {
-                if (err || !res) {
-                    return this.model.findOne({ [this.options.name]: id }, cb)
+            return callback(err, res)
+        })
+    }
+
+    private getReadObjects(Permission: Model<IPermission>, req: UserRequest, callback: (err: Error, res?: Types.ObjectId[]) => void) {
+        const table = this.model.modelName
+        if (!Permission) return callback(null)
+        Permission.find({ table, user: req.user._id }, { object: 1 }, (err, res) => {
+            if (err) return callback(err)
+            callback(null, res.map(el => el.object))
+        })
+    }
+
+    /*
+    private getEditObjects(Permission: Model<IPermission>, req: UserRequest, callback: (err: Error, res?: Types.ObjectId[]) => void) {
+        const table = this.model.modelName
+        Permission.find({ table, user: req.user._id }, { _id: 1 }, (err, res) => {
+            if (err) return callback(err)
+            callback(null, res.map(el => el.object))
+        })
+    }
+
+    private getAdminObjects(Permission: Model<IPermission>, req: UserRequest, callback: (err: Error, res?: Types.ObjectId[]) => void) {
+        const table = this.model.modelName
+        Permission.find({ table, user: req.user._id }, { _id: 1 }, (err, res) => {
+            if (err) return callback(err)
+            callback(null, res.map(el => el.object))
+        })
+    }
+    */
+
+    public getPermissionStep(req: UserRequest, Permission: Model<IPermission>, callback: (error: Error, query?: any) => void) {
+        this.options.getPermissionStep(req, (err, query) => {
+            if (err) return callback(err)
+            this.getReadObjects(Permission, req, (err, ids) => {
+                if (err) return callback(err)
+                if (ids) {
+                    if (ids.length === 0) return callback(null, { _id: { $exists: false } })
+                    if (query) return callback(null, { $and: [query, { _id: { $in: ids } }] })
+                    return callback(null, { _id: { $in: ids } })
                 }
-                return cb(err, res)
+                return callback(null, query)
             })
         })
     }
 
-    public setEndPoints(models) {
+    private addPermission(req: UserRequest, Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
+        const table = this.model.modelName
+        if (!Permission) return callback(null)
+        let p = new Permission({ table, object, user: req.user._id, read: true, write: true })
+        p.save(callback)
+    }
+    private deletePermission(Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
+        const table = this.model.modelName
+        if (Permission) return Permission.deleteMany({ table, object }, callback)
+        callback(null)
+    }
+
+    public hasAddPermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
+        this.options.hasAddPermission(req, doc, callback)
+    }
+
+    public hasUpdatePermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
+        this.options.hasUpdatePermission(req, doc, callback)
+    }
+
+    public hasDeletePermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
+        this.options.hasDeletePermission(req, doc, callback)
+    }
+
+    public hasAdminPermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
+        this.options.hasAdminPermission(req, doc, callback)
+    }
+
+    public getItemWithPermissions(req: UserRequest, Permission: Model<IPermission>, id: string, callback: (err: Error, res?: T, permission?: string) => void) {
+        this.getItem(id, (err, item) => {
+            if (err) return callback(err)
+            if (!item) return callback(null, null)
+            this.hasAdminPermission(req, item, Permission, (err, hasPermission) => {
+                if (err) return callback(err)
+                if (!hasPermission) {
+                    this.hasUpdatePermission(req, item, Permission, (err, hasPermission) => {
+                        if (err) return callback(err)
+                        if (!hasPermission) {
+                            this.getPermissionStep(req, Permission, (err, query) => {
+                                if (err) return callback(err)
+                                if (query) return this.model.findOne({ $and: [{ _id: item._id }, query] }, (err, doc) => {
+                                    callback(err, doc, 'read')
+                                })
+                                callback(null, null, 'read')
+                            })
+                        } else {
+                            return callback(null, item, 'update')
+                        }
+                    })
+                } else {
+                    return callback(null, item, 'admin')
+                }
+            })
+        })
+    }
+
+    public setEndPoints(models, Permission: Model<IPermission>) {
+        const table = this.model.modelName
         const { hasAddPermission, hasUpdatePermission, hasDeletePermission } = this.options
-        this.router.use((req, res, next) => {
+        this.router.use(this.route, (req, res, next) => {
             if (req.body) return next()
             let data = ''
             req.on('data', (chunk) => {
@@ -330,11 +427,21 @@ export default class RestApiPath {
                 }
             })
         })
-        this.router.get(`${this.route}`, (req: Request, res: Response) => {
-            this.options.getPermissionStep((err, query) => {
+        this.router.use(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response, next) => {
+            this.getItemWithPermissions(req, Permission, req.params.id, (err, item, permission) => {
+                if (err) return res.status(500).send(err.message);
+                if (!item) return res.sendStatus(404);
+                req.doc = item
+                req.permission = permission
+                next()
+            });
+        })
+
+        this.router.get(`${this.route}`, (req: UserRequest, res: Response) => {
+            this.getPermissionStep(req, Permission, (err, query) => {
                 if (err) return res.status(500).send(err.message)
                 const { $page, $sort, $sortBy, ...others } = req.query
-                getQuery(models, this.model, this, others, query, (err, cursor: DocumentQuery<any, any>) => {
+                getQuery(models, this.model, this, others, query, (err, cursor: DocumentQuery<T, T>) => {
                     if (err) return res.status(500).send(err.message)
                     cursor.count((err, count) => {
                         if (err) return res.status(500).send(err.message)
@@ -358,94 +465,157 @@ export default class RestApiPath {
                 })
             })
         });
-        this.router.get(`${this.route}/:id`, (req: Request, res: Response) => {
-            this.getItem(req.params.id, (err, item) => {
-                if (err) return res.status(500).send(err.message);
-                if (!item) return res.sendStatus(404);
-                res.send(item);
-            });
+        this.router.get(`${this.route}/:id`, (req: EditRequest<T>, res: Response) => {
+            res.send(req.doc);
         });
-        this.router.post(`${this.route}`, (req: Request, res: Response) => {
+        this.router.post(`${this.route}`, (req: UserRequest, res: Response) => {
             let item = new this.model(req.body)
             utils.replaceObjectIds(this.paths, item)
-            hasAddPermission(req, item, (err, hasPermission, message) => {
+            this.hasAddPermission(req, item, Permission, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     item.save((err, result) => {
                         if (err) return res.status(500).send(err.message);
-                        res.status(201).send(result);
-                        this.emitter.emit('add', result)
+                        this.addPermission(req, Permission, result._id, (err) => {
+                            if (err) return res.status(500).send('Error setting owner permission: ' + err.message)
+                            res.status(201).send(result);
+                            this.emitter.emit('add', result)
+                        })
                     });
                 } else {
                     res.status(403).send(message ? message : 'Unauthorized')
                 }
             })
         });
-        this.router.put(`${this.route}/:id`, (req: Request, res: Response) => {
-            this.getItem(req.params.id, (err, item) => {
+        this.router.put(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
+            const oldItem = req.doc.toObject()
+            this.hasUpdatePermission(req, req.doc, Permission, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
-                if (!item) return res.sendStatus(404);
-                const oldItem = JSON.parse(JSON.stringify(item))
-                hasUpdatePermission(req, item, (err, hasPermission, message) => {
-                    if (err) return res.status(500).send(err.message);
-                    if (hasPermission) {
-                        this.model.schema.eachPath(path => {
-                            if (['_id', '__v'].indexOf(path) < 0) {
-                                item[path.split('.').shift()] = undefined;
-                            }
-                        });
-                        Object.keys(req.body).forEach(key => item[key] = req.body[key]);
-                        utils.replaceObjectIds(this.paths, item)
-                        item.save((err, result) => {
-                            if (err) return res.status(500).send(err.message);
-                            res.send(result);
-                            this.emitter.emit('update', { old: oldItem, new: result })
-                        });
-                    } else {
-                        res.status(403).send(message ? message : 'Unauthorized')
-                    }
-                })
+                if (hasPermission) {
+                    this.model.schema.eachPath(path => {
+                        if (['_id', '__v'].indexOf(path) < 0) {
+                            req.doc[path.split('.').shift()] = undefined;
+                        }
+                    });
+                    Object.keys(req.body).forEach(key => req.doc[key] = req.body[key]);
+                    utils.replaceObjectIds(this.paths, req.doc)
+                    req.doc.save((err, result) => {
+                        if (err) return res.status(500).send(err.message);
+                        res.send(result);
+                        this.emitter.emit('update', { old: oldItem, new: result })
+                    });
+                } else {
+                    res.status(403).send(message ? message : 'Unauthorized')
+                }
             });
         });
-        this.router.patch(`${this.route}/:id`, (req: Request, res: Response) => {
-            this.getItem(req.params.id, (err, item) => {
+        this.router.patch(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
+            const oldItem = req.doc.toObject()
+            this.hasUpdatePermission(req, req.doc, Permission, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
-                if (!item) return res.sendStatus(404);
-                const oldItem = JSON.parse(JSON.stringify(item))
-                hasUpdatePermission(req, item, (err, hasPermission, message) => {
-                    if (err) return res.status(500).send(err.message);
-                    if (hasPermission) {
-                        Object.keys(req.body).forEach(key => item[key] = req.body[key]);
-                        utils.replaceObjectIds(this.paths, item)
-                        item.save((err, result) => {
-                            if (err) return res.status(500).send(err.message);
-                            res.send(result);
-                            this.emitter.emit('update', { old: oldItem, new: result })
-                        });
-                    } else {
-                        res.status(403).send(message ? message : 'Unauthorized')
-                    }
-                })
+                if (hasPermission) {
+                    Object.keys(req.body).forEach(key => req.doc[key] = req.body[key]);
+                    utils.replaceObjectIds(this.paths, req.doc)
+                    req.doc.save((err, result) => {
+                        if (err) return res.status(500).send(err.message);
+                        res.send(result);
+                        this.emitter.emit('update', { old: oldItem, new: result })
+                    });
+                } else {
+                    res.status(403).send(message ? message : 'Unauthorized')
+                }
+            })
+        });
+
+        this.router.delete(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
+            this.hasDeletePermission(req, req.doc, Permission, (err, hasPermission, message) => {
+                if (err) return res.status(500).send(err.message);
+                if (hasPermission) {
+                    req.doc.remove((err, item) => {
+                        if (err) return res.status(400).send(err.message);
+                        this.deletePermission(Permission, req.doc._id, (err) => {
+                            if (err) return res.status(500).send('Error deleting permissions: ' + err.message);
+                            res.send(item);
+                            this.emitter.emit('delete', item)
+                        })
+                    })
+                } else {
+                    res.status(403).send(message ? message : 'Unauthorized')
+                }
             });
         });
 
-        this.router.delete(`${this.route}/:id`, (req: Request, res: Response) => {
-            this.getItem(req.params.id, (err, item) => {
-                if (err) return res.status(400).send(err.message);
-                if (!item) return res.sendStatus(404);
-                hasDeletePermission(req, item, (err, hasPermission, message) => {
-                    if (err) return res.status(500).send(err.message);
-                    if (hasPermission) {
-                        this.model.deleteOne({ _id: item._id }, (err) => {
-                            if (err) return res.status(400).send(err.message);
-                            res.send(item);
-                            this.emitter.emit('delete', item)
-                        });
-                    } else {
-                        res.status(403).send(message ? message : 'Unauthorized')
-                    }
+
+        this.router.use(`${this.route}/:id/permission`, (req: PermissionRequest<T>, res: Response, next) => {
+            if (req.permission !== 'admin') return res.status(403).send()
+            next()
+        })
+
+        this.router.get(`${this.route}/:id/permission`, (req: EditRequest<T>, res: Response) => {
+            Permission.find({ table, object: req.doc._id, user: { $exists: true } }, (err, docs) => {
+                if (err) return res.status(500).send(err.message)
+                res.send(docs)
+            })
+        })
+
+        this.router.get(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
+            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
+                if (err) return res.status(500).send(err.message)
+                res.send(doc)
+            })
+        })
+
+        this.router.post(`${this.route}/:id/permission/user`, (req: EditRequest<T>, res: Response) => {
+            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.body.user) }, (err, doc) => {
+                if (err) return res.status(500).send(err.message)
+                if (doc) return res.status(402).send('This user has a permission on this object.')
+                const permission = new Permission({ ...req.body, table })
+                permission.object = req.doc._id
+                permission.save((err) => {
+                    if (err) return res.status(500).send(err.message)
+                    res.status(201).send(permission)
                 })
-            });
-        });
+            })
+        })
+
+        this.router.put(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
+            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
+                if (err) return res.status(500).send(err.message)
+                if (!doc) return res.status(404).send(`Object ${req.params.id} not found on ${table} permissions table.`)
+                doc.read = req.body.read
+                doc.write = req.body.write
+                doc.admin = req.body.admin
+                doc.save((err) => {
+                    if (err) return res.status(500).send(err.message)
+                    res.status(200).send(doc)
+                })
+            })
+        })
+
+        this.router.patch(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
+            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
+                if (err) return res.status(500).send(err.message)
+                if (!doc) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
+                if (req.body.read) doc.read = req.body.read
+                if (req.body.write) doc.write = req.body.write
+                if (req.body.admin) doc.admin = req.body.admin
+                doc.save((err) => {
+                    if (err) return res.status(500).send(err.message)
+                    res.status(200).send(doc)
+                })
+            })
+        })
+
+        this.router.delete(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
+            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
+                if (err) return res.status(500).send(err.message)
+                if (!doc) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
+                doc.remove((err)=>{
+                    if(err) return res.status(500).send(err.message)
+                    res.send(doc)
+                })
+            })
+        })
+
     }
 }

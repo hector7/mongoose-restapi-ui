@@ -41,18 +41,13 @@ class Query {
         return { query: { $or: stringPaths }, type: 'match' }
     }
 
-    static parseValue(val, fn = el => el, key = '$in') {
+    static parseValue(val, fn = el => el) {
         if (Array.isArray(val))
-            return { [key]: val.map(fn) }
+            return { $in: val.map(fn) }
         return fn(val)
     }
 
     static getMatch(ctx: CtxType, query, predefined) {
-        function parseValue(val, fn = el => el, key = '$in') {
-            if (Array.isArray(val))
-                return { [key]: val.map(fn) }
-            return fn(val)
-        }
         return {
             $and: Object.keys(query)
                 .filter(key => key !== '$any')
@@ -61,14 +56,14 @@ class Query {
                     const value = query[el]
                     if (ctx.fullPathTypes[el].type === 'Number') {
                         return {
-                            [el]: parseValue(value, utils.parseNumberFx)
+                            [el]: Query.parseValue(value, utils.parseNumberFx)
                         }
                     }
                     if (ctx.fullPathTypes[el].type === 'ObjectId') {
-                        return { [el]: parseValue(value, utils.parseObjectId) }
+                        return { [el]: Query.parseValue(value, utils.parseObjectId) }
                     }
                     return {
-                        [el]: parseValue(value)
+                        [el]: Query.parseValue(value)
                     }
                 }).concat(predefined)
         }
@@ -106,8 +101,6 @@ class Query {
         const refsKeys = Object.keys(val).filter(key => ctx.refFullPaths.indexOf(key) >= 0)
         let targetDocs = []
         refsKeys.forEach(refKey => {
-            const cb = (err, docs) => {
-            }
             const targetInfoModel = models[ctx.fullPathTypes[refKey].to]
             const targetModel: Model<any> = targetInfoModel.model
             targetModel.find({ [targetInfoModel.label]: val[refKey] }, { _id: 1 }, (err, docs) => {
@@ -145,7 +138,6 @@ function checkAnyOperator(model: Model<any>, ctx: CtxType, value,
 
 export default (models: { [key: string]: InfoModel }, model: Model<any>,
     ctx: CtxType, query: any, prevFilter: any, callback: (err: Error, cursor?: DocumentQuery<any, any>) => void) => {
-    new Query()
     if (Object.keys(query).filter(key => ctx.fullPathTypes[key] === undefined && key !== '$any').length > 0)
         return callback(new Error('query has an attribute not in mongoose model.'))
     if (Query.hasAnyRef(ctx, query)) {
