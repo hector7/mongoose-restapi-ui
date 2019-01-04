@@ -1,35 +1,30 @@
 import { Model, SchemaType, Document, DocumentQuery, Types } from 'mongoose';
 import { Router, Request, Response } from 'express'
 import { EventEmitter } from 'events';
-import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath, PermissionRequest, EditRequest, UserRequest } from '../definitions/model'
+import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath, PermissionRequest, EditRequest, UserRequest, PermissionEnum } from '../definitions/model'
 import * as utils from '../utils'
 import getQuery from './query'
 import { IPermission } from './permissionSchema';
 import { callbackify } from 'util';
+import { IRole } from './roleSchema';
+import { IUser } from './userSchema';
+import PermissionClass from './PermissionClass';
 
 
 const defaultOptions = {
     MAX_RESULTS: 100,
     name: 'name',
-    getPermissionStep: (req: UserRequest, callback) => {
+    getQuery: (user: IUser, callback) => {
         callback(null, null)
-    },
-    hasAddPermission: (req: Request, item: Document, callback: HasPermissionCallback) => {
-        callback(null, true)
-    },
-    hasUpdatePermission: (req: Request, item: Document, callback: HasPermissionCallback) => {
-        callback(null, true)
-    },
-    hasDeletePermission: (req: Request, item: Document, callback: HasPermissionCallback) => {
-        callback(null, true)
-    },
-    hasAdminPermission: (req: Request, item: Document, callback: HasPermissionCallback) => {
-        callback(null, true)
     }
 }
 
 type CustomSchemaType = SchemaType & { instance: string }
 
+type UserPermission = {
+    role: PermissionEnum,
+    permission: PermissionEnum
+}
 
 const routerWeakMap = new WeakMap()
 
@@ -37,7 +32,7 @@ function getOptions(options: ServeOptions) {
     if (options) {
         const { hasEditPermission, hasAddPermission, hasUpdatePermission, hasDeletePermission } = options
         if (hasEditPermission) {
-            const add = hasAddPermission ? hasAddPermission : hasEditPermission
+            const add = hasAddPermission
             const updatePermission = hasUpdatePermission ? hasUpdatePermission : hasEditPermission
             const deletePermission = hasDeletePermission ? hasDeletePermission : hasEditPermission
             return { ...defaultOptions, ...options, hasAddPermission: add, hasUpdatePermission: updatePermission, hasDeletePermission: deletePermission }
@@ -71,8 +66,8 @@ export default class RestApiPath<T extends Document> {
         this._route = route
         this._model = model
         this._emitter = new EventEmitter()
-        this._paths = this.getModelProperties(model.schema)
-        this.generateFullPathTypes()
+        this._paths = this._getModelProperties(model.schema)
+        this._generateFullPathTypes()
     }
 
     get MAX_RESULTS(): number {
@@ -155,8 +150,8 @@ export default class RestApiPath<T extends Document> {
         return this._numberFullPaths.indexOf(path) >= 0
     }
 
-    private generateFullPathTypes() {
-        const fullPathTypes = this.getFullPathTypes()
+    private _generateFullPathTypes() {
+        const fullPathTypes = this._getFullPathTypes()
         this._fullPathTypes = fullPathTypes
         this._stringFullPaths = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath].type === 'String' || fullPathTypes[fullPath].type === 'ArrayString')
         this._booleanFullPaths = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath].type === 'Boolean' || fullPathTypes[fullPath].type === 'ArrayBoolean')
@@ -201,11 +196,11 @@ export default class RestApiPath<T extends Document> {
         }
     }
 
-    private getType = (type: string): string => {
+    private _getType = (type: string): string => {
         return type.replace('Schema', '')
     }
 
-    private transformPaths(paths): [Path] {
+    private _transformPaths(paths): [Path] {
         let pathsWithObject = paths.filter(el => el.name.indexOf('.') >= 0)
         let pathsWithoutObject = paths.filter(el => el.name.indexOf('.') < 0)
         let newObjects = []
@@ -219,7 +214,7 @@ export default class RestApiPath<T extends Document> {
                     children: [{
                         ...el,
                         name: el.name.split('.').slice(1).join('.')
-                    }].concat(this.transformPaths(pathsWithObject.slice(key + 1).filter(el => el.name.startsWith(base + '.')).map(el => ({
+                    }].concat(this._transformPaths(pathsWithObject.slice(key + 1).filter(el => el.name.startsWith(base + '.')).map(el => ({
                         ...el,
                         name: el.name.slice(base.length + 1)
                     }))))
@@ -233,8 +228,8 @@ export default class RestApiPath<T extends Document> {
         return pathsWithoutObject.concat(newObjects)
     }
 
-    private getModelProperties(schema): Path[] {
-        return this.transformPaths(Object.keys(schema.paths).map((key) => {
+    private _getModelProperties(schema): Path[] {
+        return this._transformPaths(Object.keys(schema.paths).map((key) => {
             const type = schema.paths[key].constructor.name
             if (type === 'DocumentArray') {
                 const children = schema.paths[key].schema
@@ -247,7 +242,7 @@ export default class RestApiPath<T extends Document> {
                     complex: true,
                     label: labels.length > 0 ? labels.shift() : '_id',
                     required: schema.requiredPaths(true).indexOf(key) >= 0,
-                    children: this.getModelProperties(schema.paths[key].schema)
+                    children: this._getModelProperties(schema.paths[key].schema)
                 }
                 //}
             }
@@ -278,13 +273,13 @@ export default class RestApiPath<T extends Document> {
             return {
                 name: key,
                 auto: schema.paths[key].options.auto,
-                type: this.getType(schema.paths[key].constructor.name),
+                type: this._getType(schema.paths[key].constructor.name),
                 required: schema.requiredPaths(true).indexOf(key) >= 0
             };
         }));
     }
 
-    private getFullPathTypes(): FullPathTypes {
+    private _getFullPathTypes(): FullPathTypes {
         function getFullPath(paths: Path[]): FullPathTypes {
             const fullPaths = {}
             paths.forEach((path: Path) => {
@@ -311,15 +306,6 @@ export default class RestApiPath<T extends Document> {
         })
     }
 
-    private getReadObjects(Permission: Model<IPermission>, req: UserRequest, callback: (err: Error, res?: Types.ObjectId[]) => void) {
-        const table = this.model.modelName
-        if (!Permission) return callback(null)
-        Permission.find({ table, user: req.user._id }, { object: 1 }, (err, res) => {
-            if (err) return callback(err)
-            callback(null, res.map(el => el.object))
-        })
-    }
-
     /*
     private getEditObjects(Permission: Model<IPermission>, req: UserRequest, callback: (err: Error, res?: Types.ObjectId[]) => void) {
         const table = this.model.modelName
@@ -338,80 +324,21 @@ export default class RestApiPath<T extends Document> {
     }
     */
 
-    public getPermissionStep(req: UserRequest, Permission: Model<IPermission>, callback: (error: Error, query?: any) => void) {
-        this.options.getPermissionStep(req, (err, query) => {
-            if (err) return callback(err)
-            this.getReadObjects(Permission, req, (err, ids) => {
-                if (err) return callback(err)
-                if (ids) {
-                    if (ids.length === 0) return callback(null, { _id: { $exists: false } })
-                    if (query) return callback(null, { $and: [query, { _id: { $in: ids } }] })
-                    return callback(null, { _id: { $in: ids } })
-                }
-                return callback(null, query)
-            })
-        })
-    }
-
-    private addPermission(req: UserRequest, Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
+    private _addPermission(req: UserRequest, Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
         const table = this.model.modelName
         if (!Permission) return callback(null)
-        let p = new Permission({ table, object, user: req.user._id, read: true, write: true })
+        let p = new Permission({ table, object, user: req.user._id, permission: PermissionEnum.DELETE })
         p.save(callback)
     }
-    private deletePermission(Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
+    private _deletePermission(Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
         const table = this.model.modelName
         if (Permission) return Permission.deleteMany({ table, object }, callback)
         callback(null)
     }
 
-    public hasAddPermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
-        this.options.hasAddPermission(req, doc, callback)
-    }
-
-    public hasUpdatePermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
-        this.options.hasUpdatePermission(req, doc, callback)
-    }
-
-    public hasDeletePermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
-        this.options.hasDeletePermission(req, doc, callback)
-    }
-
-    public hasAdminPermission(req: UserRequest, doc: T, Permission: Model<IPermission>, callback: HasPermissionCallback) {
-        this.options.hasAdminPermission(req, doc, callback)
-    }
-
-    public getItemWithPermissions(req: UserRequest, Permission: Model<IPermission>, id: string, callback: (err: Error, res?: T, permission?: string) => void) {
-        this.getItem(id, (err, item) => {
-            if (err) return callback(err)
-            if (!item) return callback(null, null)
-            this.hasAdminPermission(req, item, Permission, (err, hasPermission) => {
-                if (err) return callback(err)
-                if (!hasPermission) {
-                    this.hasUpdatePermission(req, item, Permission, (err, hasPermission) => {
-                        if (err) return callback(err)
-                        if (!hasPermission) {
-                            this.getPermissionStep(req, Permission, (err, query) => {
-                                if (err) return callback(err)
-                                if (query) return this.model.findOne({ $and: [{ _id: item._id }, query] }, (err, doc) => {
-                                    callback(err, doc, 'read')
-                                })
-                                callback(null, null, 'read')
-                            })
-                        } else {
-                            return callback(null, item, 'update')
-                        }
-                    })
-                } else {
-                    return callback(null, item, 'admin')
-                }
-            })
-        })
-    }
-
-    public setEndPoints(models, Permission: Model<IPermission>) {
+    public setEndPoints(models, Permission: Model<IPermission>, Role: Model<IRole>) {
+        const permission = new PermissionClass(this.model, Permission, Role, this.options)
         const table = this.model.modelName
-        const { hasAddPermission, hasUpdatePermission, hasDeletePermission } = this.options
         this.router.use(this.route, (req, res, next) => {
             if (req.body) return next()
             let data = ''
@@ -427,18 +354,18 @@ export default class RestApiPath<T extends Document> {
                 }
             })
         })
+
         this.router.use(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response, next) => {
-            this.getItemWithPermissions(req, Permission, req.params.id, (err, item, permission) => {
+            this.getItem(req.params.id, (err, item) => {
                 if (err) return res.status(500).send(err.message);
                 if (!item) return res.sendStatus(404);
                 req.doc = item
-                req.permission = permission
                 next()
-            });
+            })
         })
 
         this.router.get(`${this.route}`, (req: UserRequest, res: Response) => {
-            this.getPermissionStep(req, Permission, (err, query) => {
+            permission.getReadQuery(req.user, (err, query) => {
                 if (err) return res.status(500).send(err.message)
                 const { $page, $sort, $sortBy, ...others } = req.query
                 getQuery(models, this.model, this, others, query, (err, cursor: DocumentQuery<T, T>) => {
@@ -465,18 +392,23 @@ export default class RestApiPath<T extends Document> {
                 })
             })
         });
-        this.router.get(`${this.route}/:id`, (req: EditRequest<T>, res: Response) => {
-            res.send(req.doc);
+        this.router.get(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
+            permission.hasReadPermission(req.user, req.doc, (err, hasPermission, reason) => {
+                if (err) res.status(500).send(err.message)
+                if (!hasPermission) return res.status(403).send()
+                res.send(req.doc);
+            })
         });
-        this.router.post(`${this.route}`, (req: UserRequest, res: Response) => {
+        this.router.post(`${this.route}`, (req: PermissionRequest<T>, res: Response) => {
+            if(!req.body) return res.status(401).send('body is empty')
             let item = new this.model(req.body)
             utils.replaceObjectIds(this.paths, item)
-            this.hasAddPermission(req, item, Permission, (err, hasPermission, message) => {
+            permission.hasAddPermission(req.user, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     item.save((err, result) => {
                         if (err) return res.status(500).send(err.message);
-                        this.addPermission(req, Permission, result._id, (err) => {
+                        this._addPermission(req, Permission, result._id, (err) => {
                             if (err) return res.status(500).send('Error setting owner permission: ' + err.message)
                             res.status(201).send(result);
                             this.emitter.emit('add', result)
@@ -488,8 +420,9 @@ export default class RestApiPath<T extends Document> {
             })
         });
         this.router.put(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
+            if(!req.body) return res.status(401).send('body is empty')
             const oldItem = req.doc.toObject()
-            this.hasUpdatePermission(req, req.doc, Permission, (err, hasPermission, message) => {
+            permission.hasUpdatePermission(req.user, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     this.model.schema.eachPath(path => {
@@ -510,8 +443,9 @@ export default class RestApiPath<T extends Document> {
             });
         });
         this.router.patch(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
+            if(!req.body) return res.status(401).send('body is empty')
             const oldItem = req.doc.toObject()
-            this.hasUpdatePermission(req, req.doc, Permission, (err, hasPermission, message) => {
+            permission.hasUpdatePermission(req.user, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     Object.keys(req.body).forEach(key => req.doc[key] = req.body[key]);
@@ -528,12 +462,12 @@ export default class RestApiPath<T extends Document> {
         });
 
         this.router.delete(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            this.hasDeletePermission(req, req.doc, Permission, (err, hasPermission, message) => {
+            permission.hasDeletePermission(req.user, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     req.doc.remove((err, item) => {
                         if (err) return res.status(400).send(err.message);
-                        this.deletePermission(Permission, req.doc._id, (err) => {
+                        this._deletePermission(Permission, req.doc._id, (err) => {
                             if (err) return res.status(500).send('Error deleting permissions: ' + err.message);
                             res.send(item);
                             this.emitter.emit('delete', item)
@@ -547,8 +481,11 @@ export default class RestApiPath<T extends Document> {
 
 
         this.router.use(`${this.route}/:id/permission`, (req: PermissionRequest<T>, res: Response, next) => {
-            if (req.permission !== 'admin') return res.status(403).send()
-            next()
+            permission.hasAdminPermission(req.user, req.doc, (err, hasPermission) => {
+                if (err) return res.status(500).send(err.message)
+                if (!hasPermission) return res.status(403).send()
+                next()
+            })
         })
 
         this.router.get(`${this.route}/:id/permission`, (req: EditRequest<T>, res: Response) => {
@@ -582,9 +519,9 @@ export default class RestApiPath<T extends Document> {
             Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
                 if (err) return res.status(500).send(err.message)
                 if (!doc) return res.status(404).send(`Object ${req.params.id} not found on ${table} permissions table.`)
-                doc.read = req.body.read
-                doc.write = req.body.write
-                doc.admin = req.body.admin
+                if (req.body.read) doc.permission = PermissionEnum.READ
+                if (req.body.write) doc.permission = PermissionEnum.DELETE
+                if (req.body.admin) doc.permission = PermissionEnum.ADMIN
                 doc.save((err) => {
                     if (err) return res.status(500).send(err.message)
                     res.status(200).send(doc)
@@ -596,9 +533,9 @@ export default class RestApiPath<T extends Document> {
             Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
                 if (err) return res.status(500).send(err.message)
                 if (!doc) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
-                if (req.body.read) doc.read = req.body.read
-                if (req.body.write) doc.write = req.body.write
-                if (req.body.admin) doc.admin = req.body.admin
+                if (req.body.read) doc.permission = PermissionEnum.READ
+                if (req.body.write) doc.permission = PermissionEnum.DELETE
+                if (req.body.admin) doc.permission = PermissionEnum.ADMIN
                 doc.save((err) => {
                     if (err) return res.status(500).send(err.message)
                     res.status(200).send(doc)
@@ -610,12 +547,12 @@ export default class RestApiPath<T extends Document> {
             Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
                 if (err) return res.status(500).send(err.message)
                 if (!doc) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
-                doc.remove((err)=>{
-                    if(err) return res.status(500).send(err.message)
+                doc.remove((err) => {
+                    if (err) return res.status(500).send(err.message)
                     res.send(doc)
                 })
             })
         })
-
+        return permission
     }
 }

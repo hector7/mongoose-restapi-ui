@@ -1,21 +1,16 @@
 import { Schema, Document } from "mongoose";
+import { PermissionEnum, ROLE_MODEL } from "../definitions/model";
 export type IPermission = {
     table: string,
     object: any,
-    user?: any,
-    role?: any,
-    read?: boolean,
-    write?: boolean,
-    admin?: boolean
+    user: any,
+    permission: PermissionEnum
 } & Document
 const permissionSchema = new Schema({
     table: { type: String, required: true },
     object: { type: Schema.Types.ObjectId, required: true },
     user: Schema.Types.ObjectId,
-    role: Schema.Types.ObjectId,
-    read: Boolean,
-    write: Boolean,
-    admin: Boolean
+    permission: Number
 })
 
 export default permissionSchema

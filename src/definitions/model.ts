@@ -1,6 +1,8 @@
 import { Request } from 'express'
 import { Document } from 'mongoose';
 import { IPermission } from '../models/permissionSchema';
+import { SchemaRolePermission } from '../models/roleSchema';
+import { IUser } from '../models/userSchema';
 
 type RequiredAttrsPath = {
     name: string,
@@ -24,32 +26,38 @@ type FieldPath = RequiredAttrsPath & {
 }
 export type Path = FieldPath | ObjectPath | ArrayPath
 
-export type HasPermissionCallback = (error: Error, hasPermission: boolean, reason?: string) => void
+export type HasPermissionCallback = (error: Error, hasPermission?: boolean, reason?: string) => void
 
 export type UserRequest = Request & {
-    user: Document
+    user: IUser
 }
 
 export type EditRequest<T extends Document> = UserRequest & {
     doc: T
 }
+
 export type PermissionRequest<T extends Document> = EditRequest<T> & {
     perm: IPermission,
-    permission: string
+    permission: PermissionEnum,
+    role: PermissionEnum
 }
 
 type GetPermissionCallback = (error: Error, query: any) => void
-type EditPermision = (req: Request, doc: Document, callback: HasPermissionCallback) => void
+type GetPermission = (user: IUser, callback: GetPermissionCallback) => void
+type AddPermision = (user: IUser, callback: HasPermissionCallback) => void
+type EditPermision = (user: IUser, doc: Document, callback: HasPermissionCallback) => void
+export type PermissionChecks = {
+    getQuery: GetPermission,
+    hasAdminPermission: EditPermision,
+    hasEditPermission: EditPermision,
+    hasAddPermission: AddPermision,
+    hasUpdatePermission: EditPermision,
+    hasDeletePermission: EditPermision,
+}
 export type ServeOptions = {
     MAX_RESULTS?: number,
-    name?: string,
-    getPermissionStep?: (req: Request, callback: GetPermissionCallback) => void,
-    hasAdminPermission?: EditPermision,
-    hasEditPermission?: EditPermision,
-    hasAddPermission?: EditPermision,
-    hasUpdatePermission?: EditPermision,
-    hasDeletePermission?: EditPermision,
-}
+    name?: string
+} & Partial<PermissionChecks>
 export type InfoModel = {
     name: string,
     label: string,
@@ -57,5 +65,17 @@ export type InfoModel = {
     paths: Path[],
     model: any
 }
+
+export enum PermissionEnum {
+    ADMIN = 5,
+    DELETE = 4,
+    UPDATE = 3,
+    READ = 2,
+    ADD = 1,
+}
+
+const PERMISSION_MODEL = 'Permission'
+const ROLE_MODEL = 'Role'
+export { PERMISSION_MODEL, ROLE_MODEL }
 
 export type FullPathTypes = { type: string } | { type: 'Ref' | 'ArrayRef', to: string } | {}

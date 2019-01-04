@@ -31,10 +31,11 @@ export function containsStringFx(el) {
 
 export function replaceObjectIds(paths: Path[], object): void {
     paths.forEach(path => {
-        if (path.type === 'Array')
-            object[path.name].forEach(subEl => {
-                replaceObjectIds(path.children, subEl)
+        if (path.type === 'Array') {
+            if (object[path.name]) object[path.name].forEach(subEl => {
+                if (subEl) replaceObjectIds(path.children, subEl)
             })
+        }
         if (path.type === 'ObjectId') {
             if (object[path.name])
                 object[path.name] = ObjectId(object[path.name])

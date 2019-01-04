@@ -6,9 +6,14 @@ import mongoose = require("mongoose");
 import bodyParser = require("body-parser");
 import { Model, Connection } from "mongoose";
 import { Server } from "http";
-import { UserRequest } from "../src/definitions/model";
+import { UserRequest, PermissionEnum, PermissionChecks } from "../src/definitions/model";
+import { IUser } from "../src/models/userSchema";
+import { EventEmitter } from "events";
 let chai = require("chai");
 
+const userSchema = new mongoose.Schema({
+    roles: [mongoose.Schema.Types.ObjectId]
+})
 const CUSTOMER = 'Customer'
 const PROVIDER = 'Provider'
 @suite
@@ -39,13 +44,19 @@ class RouterTest {
         const providerSchema = new mongoose.Schema({
             ref: { type: mongoose.Schema.Types.ObjectId, ref: CUSTOMER }
         })
+        const hasAddPerm = (req, callback) => {
+            callback(null, true)
+        }
+        const hasPerm = (req, doc, callback) => {
+            callback(null, true)
+        }
         RouterTest.customer = RouterTest.connection.model(CUSTOMER, customerSchema);
         RouterTest.provider = RouterTest.connection.model(PROVIDER, providerSchema);
 
         const router = ApiRouter({ strict: true })
         router.setGlobalRoute('/')
-        router.setModel(`/${PROVIDER}`, RouterTest.provider)
-        router.setModel(`/${CUSTOMER}`, RouterTest.customer, { name: 'name' })
+        router.setModel(`/${PROVIDER}`, RouterTest.provider, { hasAdminPermission: hasPerm, hasEditPermission: hasPerm, hasAddPermission: hasAddPerm })
+        router.setModel(`/${CUSTOMER}`, RouterTest.customer, { hasAdminPermission: hasPerm, hasEditPermission: hasPerm, hasAddPermission: hasAddPerm, name: 'name' })
         app.use('/', router)
         app.get('/tree', router.publishUiTree())
         RouterTest.server = app.listen(3001, (error: Error) => {
@@ -254,7 +265,8 @@ class RouterTestPermissions {
     public static server: Server
     public static customer: Model<any>
     public static provider: Model<any>
-
+    public static emm: EventEmitter & PermissionChecks
+    public static user: IUser
     public static before(done) {
         const app = express()
         app.use(bodyParser.json())
@@ -264,7 +276,7 @@ class RouterTestPermissions {
         mongoose.Promise = global.Promise;
 
         const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_router";
-        RouterTest.connection = mongoose.createConnection(MONGODB_CONNECTION);
+        RouterTestPermissions.connection = mongoose.createConnection(MONGODB_CONNECTION);
         const customerSchema = new mongoose.Schema({
             name: String,
             number: Number,
@@ -275,33 +287,50 @@ class RouterTestPermissions {
         const providerSchema = new mongoose.Schema({
             ref: { type: mongoose.Schema.Types.ObjectId, ref: CUSTOMER }
         })
-        RouterTest.customer = RouterTest.connection.model(CUSTOMER, customerSchema);
-        RouterTest.provider = RouterTest.connection.model(PROVIDER, providerSchema);
+        const User = RouterTestPermissions.connection.model<IUser>('User', userSchema)
+        RouterTestPermissions.customer = RouterTestPermissions.connection.model(CUSTOMER, customerSchema);
+        RouterTestPermissions.provider = RouterTestPermissions.connection.model(PROVIDER, providerSchema);
 
         const router = ApiRouter({ strict: true })
+        RouterTestPermissions.user = new User()
+        var adminId = null
         router.use((req: UserRequest, res, next) => {
-            req.user = new RouterTest.customer()
+            req.user =  RouterTestPermissions.user
+            req.user.roles = [adminId]
             next()
         })
-        router.setPermissionsModel(RouterTest.connection)
+        router.setPermissionsModel(RouterTestPermissions.connection)
         router.setGlobalRoute('/')
-        router.setModel(`/${PROVIDER}`, RouterTest.provider)
-        router.setModel(`/${CUSTOMER}`, RouterTest.customer, { name: 'name' })
+        RouterTestPermissions.emm = router.setModel(`/${PROVIDER}`, RouterTestPermissions.provider)
+        router.setModel(`/${CUSTOMER}`, RouterTestPermissions.customer, { name: 'name' })
         app.use('/', router)
         app.get('/tree', router.publishUiTree())
-        RouterTest.server = app.listen(3001, (error: Error) => {
-            let chaiHttp = require('chai-http');
-            chai.use(chaiHttp)
-            chai.should();
-            done(error)
+        const RoleModel = router.roleModel()
+        new RoleModel({
+            name: 'admin', schemas: [{
+                name: RouterTestPermissions.provider.modelName,
+                permission: PermissionEnum.ADMIN
+            }, {
+                name: RouterTestPermissions.customer.modelName,
+                permission: PermissionEnum.ADMIN
+            }]
+        }).save((err, doc) => {
+            if (err) return done(err)
+            adminId = doc._id
+            RouterTestPermissions.server = app.listen(3001, (error: Error) => {
+                let chaiHttp = require('chai-http');
+                chai.use(chaiHttp)
+                chai.should();
+                done(error)
+            })
         })
     }
     public static after(done) {
-        RouterTest.customer.remove((error) => {
+        RouterTestPermissions.customer.remove((error) => {
             if (error) return done(error)
-            RouterTest.provider.remove((error) => {
+            RouterTestPermissions.provider.remove((error) => {
                 if (error) return done(error)
-                RouterTest.connection.close((error) => {
+                RouterTestPermissions.connection.close((error) => {
                     if (error) return done(error)
                     done(error)
                 })
@@ -310,7 +339,7 @@ class RouterTestPermissions {
     }
     @test("should get all customer objects")
     public getAllCustomerObjects(done) {
-        chai.request(RouterTest.server)
+        chai.request(RouterTestPermissions.server)
             .get(`/${CUSTOMER}`)
             .end((err, res) => {
                 if (err) return done(err)
@@ -325,7 +354,7 @@ class RouterTestPermissions {
     }
     @test("should get all Provider objects")
     public getAllProviderObjects(done) {
-        chai.request(RouterTest.server)
+        chai.request(RouterTestPermissions.server)
             .get(`/${PROVIDER}`)
             .end((err, res) => {
                 if (err) return done(err)
@@ -339,28 +368,33 @@ class RouterTestPermissions {
             })
     }
 
-    @test("should get create a customer object")
+    @test("should create a customer object")
     public postCustomer(done) {
         let customer = {
             name: 'Hector'
         }
-        chai.request(RouterTest.server)
-            .post(`/${CUSTOMER}`)
-            .send(customer)
-            .end((err, res) => {
-                if (err) return done(err)
-                res.should.have.status(201);
-                res.body.should.be.a('object');
-                res.body.should.have.property('_id');
-                res.body.should.have.property('name').eql('Hector');
-                RouterTest.customerRef = res.body
-                done();
-            });
+        
+        RouterTestPermissions.emm.hasAddPermission(RouterTestPermissions.user, (err, hasAddPermission)=>{
+            if(err) return done(err)
+            hasAddPermission.should.be.eql(true)
+            chai.request(RouterTestPermissions.server)
+                .post(`/${CUSTOMER}`)
+                .send(customer)
+                .end((err, res) => {
+                    if (err) return done(err)
+                    res.should.have.status(201);
+                    res.body.should.be.a('object');
+                    res.body.should.have.property('_id');
+                    res.body.should.have.property('name').eql('Hector');
+                    RouterTestPermissions.customerRef = res.body
+                    done();
+                });
+        })
     }
     @test("find by id - should get get the created customer object")
     public getIdCustomer(done) {
-        chai.request(RouterTest.server)
-            .get(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissions.server)
+            .get(`/${CUSTOMER}/${RouterTestPermissions.customerRef._id}`)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
@@ -372,8 +406,8 @@ class RouterTestPermissions {
     }
     @test("find by name - should get get the created customer object")
     public getNameCustomer(done) {
-        chai.request(RouterTest.server)
-            .get(`/${CUSTOMER}/${RouterTest.customerRef.name}`)
+        chai.request(RouterTestPermissions.server)
+            .get(`/${CUSTOMER}/${RouterTestPermissions.customerRef.name}`)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
@@ -389,17 +423,17 @@ class RouterTestPermissions {
             name: 'Hector',
             number: 1
         }
-        chai.request(RouterTest.server)
-            .put(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissions.server)
+            .put(`/${CUSTOMER}/${RouterTestPermissions.customerRef._id}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissions.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(1);
-                RouterTest.customerRef = res.body
+                RouterTestPermissions.customerRef = res.body
                 done();
             });
     }
@@ -409,17 +443,17 @@ class RouterTestPermissions {
             name: 'Hector',
             number: 2
         }
-        chai.request(RouterTest.server)
-            .put(`/${CUSTOMER}/${RouterTest.customerRef.name}`)
+        chai.request(RouterTestPermissions.server)
+            .put(`/${CUSTOMER}/${RouterTestPermissions.customerRef.name}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissions.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(2);
-                RouterTest.customerRef = res.body
+                RouterTestPermissions.customerRef = res.body
                 done();
             });
     }
@@ -428,17 +462,17 @@ class RouterTestPermissions {
         let customer = {
             number: 3
         }
-        chai.request(RouterTest.server)
-            .patch(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissions.server)
+            .patch(`/${CUSTOMER}/${RouterTestPermissions.customerRef._id}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissions.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(3);
-                RouterTest.customerRef = res.body
+                RouterTestPermissions.customerRef = res.body
                 done();
             });
     }
@@ -447,31 +481,31 @@ class RouterTestPermissions {
         let customer = {
             number: 4
         }
-        chai.request(RouterTest.server)
-            .patch(`/${CUSTOMER}/${RouterTest.customerRef.name}`)
+        chai.request(RouterTestPermissions.server)
+            .patch(`/${CUSTOMER}/${RouterTestPermissions.customerRef.name}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissions.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(4);
-                RouterTest.customerRef = res.body
+                RouterTestPermissions.customerRef = res.body
                 done();
             });
     }
     @test("should delete the created customer object")
     public deleteCustomer(done) {
-        chai.request(RouterTest.server)
-            .delete(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissions.server)
+            .delete(`/${CUSTOMER}/${RouterTestPermissions.customerRef._id}`)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissions.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
-                RouterTest.customerRef = res.body
+                RouterTestPermissions.customerRef = res.body
                 done();
             });
     }
@@ -505,7 +539,7 @@ class RouterTestPermissionsEndPoints {
         mongoose.Promise = global.Promise;
 
         const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_router";
-        RouterTest.connection = mongoose.createConnection(MONGODB_CONNECTION);
+        RouterTestPermissionsEndPoints.connection = mongoose.createConnection(MONGODB_CONNECTION);
         const customerSchema = new mongoose.Schema({
             name: String,
             number: Number,
@@ -516,36 +550,52 @@ class RouterTestPermissionsEndPoints {
         const providerSchema = new mongoose.Schema({
             ref: { type: mongoose.Schema.Types.ObjectId, ref: CUSTOMER }
         })
-        RouterTest.customer = RouterTest.connection.model(CUSTOMER, customerSchema);
-        RouterTest.provider = RouterTest.connection.model(PROVIDER, providerSchema);
+        const user = RouterTestPermissionsEndPoints.connection.model<IUser>('User', userSchema)
+        RouterTestPermissionsEndPoints.customer = RouterTestPermissionsEndPoints.connection.model(CUSTOMER, customerSchema);
+        RouterTestPermissionsEndPoints.provider = RouterTestPermissionsEndPoints.connection.model(PROVIDER, providerSchema);
 
         const router = ApiRouter({ strict: true })
+        var idAdmin = null
         router.use((req: UserRequest, res, next) => {
-            req.user = new RouterTest.customer()
+            req.user = new user({ roles: [idAdmin] })
             next()
         })
-        router.setPermissionsModel(RouterTest.connection)
+        router.setPermissionsModel(RouterTestPermissionsEndPoints.connection)
         router.setGlobalRoute('/')
         const hasAdminPermission = (req, doc, callback) => {
             callback(null, true)
         }
-        router.setModel(`/${PROVIDER}`, RouterTest.provider, { hasAdminPermission })
-        router.setModel(`/${CUSTOMER}`, RouterTest.customer, { name: 'name', hasAdminPermission })
+        router.setModel(`/${PROVIDER}`, RouterTestPermissionsEndPoints.provider, { hasAdminPermission })
+        router.setModel(`/${CUSTOMER}`, RouterTestPermissionsEndPoints.customer, { name: 'name', hasAdminPermission })
+
         app.use('/', router)
         app.get('/tree', router.publishUiTree())
-        RouterTest.server = app.listen(3001, (error: Error) => {
-            let chaiHttp = require('chai-http');
-            chai.use(chaiHttp)
-            chai.should();
-            done(error)
+        const RoleModel = router.roleModel()
+        new RoleModel({
+            name: 'admin', schemas: [{
+                name: RouterTestPermissionsEndPoints.provider.modelName,
+                permission: PermissionEnum.ADMIN
+            }, {
+                name: RouterTestPermissionsEndPoints.customer.modelName,
+                permission: PermissionEnum.ADMIN
+            }]
+        }).save((err, doc) => {
+            if (err) return done(err)
+            idAdmin = doc._id
+            RouterTestPermissionsEndPoints.server = app.listen(3001, (error: Error) => {
+                let chaiHttp = require('chai-http');
+                chai.use(chaiHttp)
+                chai.should();
+                done(error)
+            })
         })
     }
     public static after(done) {
-        RouterTest.customer.remove((error) => {
+        RouterTestPermissionsEndPoints.customer.remove((error) => {
             if (error) return done(error)
-            RouterTest.provider.remove((error) => {
+            RouterTestPermissionsEndPoints.provider.remove((error) => {
                 if (error) return done(error)
-                RouterTest.connection.close((error) => {
+                RouterTestPermissionsEndPoints.connection.close((error) => {
                     if (error) return done(error)
                     done(error)
                 })
@@ -554,7 +604,7 @@ class RouterTestPermissionsEndPoints {
     }
     @test("should get all customer objects")
     public getAllCustomerObjects(done) {
-        chai.request(RouterTest.server)
+        chai.request(RouterTestPermissionsEndPoints.server)
             .get(`/${CUSTOMER}`)
             .end((err, res) => {
                 if (err) return done(err)
@@ -569,7 +619,7 @@ class RouterTestPermissionsEndPoints {
     }
     @test("should get all Provider objects")
     public getAllProviderObjects(done) {
-        chai.request(RouterTest.server)
+        chai.request(RouterTestPermissionsEndPoints.server)
             .get(`/${PROVIDER}`)
             .end((err, res) => {
                 if (err) return done(err)
@@ -588,7 +638,7 @@ class RouterTestPermissionsEndPoints {
         let customer = {
             name: 'Hector'
         }
-        chai.request(RouterTest.server)
+        chai.request(RouterTestPermissionsEndPoints.server)
             .post(`/${CUSTOMER}`)
             .send(customer)
             .end((err, res) => {
@@ -597,14 +647,14 @@ class RouterTestPermissionsEndPoints {
                 res.body.should.be.a('object');
                 res.body.should.have.property('_id');
                 res.body.should.have.property('name').eql('Hector');
-                RouterTest.customerRef = res.body
+                RouterTestPermissionsEndPoints.customerRef = res.body
                 done();
             });
     }
     @test("find by id - should get get the created customer object")
     public getIdCustomer(done) {
-        chai.request(RouterTest.server)
-            .get(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .get(`/${CUSTOMER}/${RouterTestPermissionsEndPoints.customerRef._id}`)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
@@ -616,8 +666,8 @@ class RouterTestPermissionsEndPoints {
     }
     @test("find by name - should get get the created customer object")
     public getNameCustomer(done) {
-        chai.request(RouterTest.server)
-            .get(`/${CUSTOMER}/${RouterTest.customerRef.name}`)
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .get(`/${CUSTOMER}/${RouterTestPermissionsEndPoints.customerRef.name}`)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
@@ -633,17 +683,17 @@ class RouterTestPermissionsEndPoints {
             name: 'Hector',
             number: 1
         }
-        chai.request(RouterTest.server)
-            .put(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .put(`/${CUSTOMER}/${RouterTestPermissionsEndPoints.customerRef._id}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissionsEndPoints.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(1);
-                RouterTest.customerRef = res.body
+                RouterTestPermissionsEndPoints.customerRef = res.body
                 done();
             });
     }
@@ -653,17 +703,17 @@ class RouterTestPermissionsEndPoints {
             name: 'Hector',
             number: 2
         }
-        chai.request(RouterTest.server)
-            .put(`/${CUSTOMER}/${RouterTest.customerRef.name}`)
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .put(`/${CUSTOMER}/${RouterTestPermissionsEndPoints.customerRef.name}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissionsEndPoints.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(2);
-                RouterTest.customerRef = res.body
+                RouterTestPermissionsEndPoints.customerRef = res.body
                 done();
             });
     }
@@ -672,17 +722,17 @@ class RouterTestPermissionsEndPoints {
         let customer = {
             number: 3
         }
-        chai.request(RouterTest.server)
-            .patch(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .patch(`/${CUSTOMER}/${RouterTestPermissionsEndPoints.customerRef._id}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissionsEndPoints.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(3);
-                RouterTest.customerRef = res.body
+                RouterTestPermissionsEndPoints.customerRef = res.body
                 done();
             });
     }
@@ -691,37 +741,37 @@ class RouterTestPermissionsEndPoints {
         let customer = {
             number: 4
         }
-        chai.request(RouterTest.server)
-            .patch(`/${CUSTOMER}/${RouterTest.customerRef.name}`)
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .patch(`/${CUSTOMER}/${RouterTestPermissionsEndPoints.customerRef.name}`)
             .send(customer)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissionsEndPoints.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
                 res.body.should.have.property('number').eql(4);
-                RouterTest.customerRef = res.body
+                RouterTestPermissionsEndPoints.customerRef = res.body
                 done();
             });
     }
     @test("should delete the created customer object")
     public deleteCustomer(done) {
-        chai.request(RouterTest.server)
-            .delete(`/${CUSTOMER}/${RouterTest.customerRef._id}`)
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .delete(`/${CUSTOMER}/${RouterTestPermissionsEndPoints.customerRef._id}`)
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
                 res.body.should.be.a('object');
-                res.body.should.have.property('_id').eql(RouterTest.customerRef._id);
+                res.body.should.have.property('_id').eql(RouterTestPermissionsEndPoints.customerRef._id);
                 res.body.should.have.property('name').eql('Hector');
-                RouterTest.customerRef = res.body
+                RouterTestPermissionsEndPoints.customerRef = res.body
                 done();
             });
     }
     @test("should get the tree")
     public getTree(done) {
-        chai.request(RouterTest.server)
+        chai.request(RouterTestPermissionsEndPoints.server)
             .get('/tree')
             .end((err, res) => {
                 if (err) return done(err)

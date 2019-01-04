@@ -58,5 +58,12 @@ class UtilsTest {
         }
         Utils.replaceObjectIds([complexPath], complexObjectId)
         complexObjectId.complex[0].objectid.constructor.name.should.equals('ObjectID')
+        object.objectid.constructor.name.should.equals('ObjectID')
+        let emptyObject = {}
+        Utils.replaceObjectIds([complexPath], emptyObject)
+        Object.keys(emptyObject).length.should.be.eql(0)
+        let wrongObject = {complex: [null]}
+        Utils.replaceObjectIds([complexPath], wrongObject)
+        wrongObject.should.be.eql({complex: [null]})
     }
 }
