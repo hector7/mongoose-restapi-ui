@@ -16,7 +16,7 @@ type ApiRouter = Router & {
     setModel?: (path: string, Model: Model<any>, ServeOptions?: ServeOptions) => EventEmitter & PermissionChecks
     publishUiTree?: () => RequestHandler
     setGlobalRoute?: (string: string) => void
-    setPermissionsModel?: (connection: Connection) => void
+    setConnection?: (connection: Connection) => void
 }
 
 function ApiRouter(...args): ApiRouter {
@@ -29,7 +29,7 @@ function ApiRouter(...args): ApiRouter {
     router.setGlobalRoute = (path: string) => {
         globalRoute = path
     }
-    router.setPermissionsModel = (connection: Connection) => {
+    router.setConnection = (connection: Connection) => {
         permissionModel = connection.model<IPermission>(PERMISSION_MODEL, permissionSchema)
         roleModel = connection.model<IRole>(ROLE_MODEL, roleSchema)
     }

@@ -40,8 +40,23 @@ app.get('/api/ui', router.publishUiTree())
 
 (Note that publishUI method don't need the global path, can be published on other site and accepts an optional parameter express.Router that will be switched if there are provided. If not are provided there are all models and UI on the same router.)
 
+### (NEW) Use permissions and roles
+The library needs to pass your mongoose connection, and a middleware in order to get the user. Here an example:
 
-
+```js
+import { ApiRouter } from 'mongoose-restapi-ui'
+const customer = model('Customer', new Schema({
+    name: { type: String, required: true },
+    comment: { type: String }
+}))
+router.use((req, res, next)=>{
+    req.user = // your mongoose user document....
+    next()
+})
+router.setModel('/customer', customer)
+router.setConnection(mongoose) // or object returned from mongoose.connect
+app.use('/', router)
+```
 
 ## UI integration
 Use react component [mongoose-restapi-ui-component](https://www.npmjs.com/package/mongoose-restapi-ui-component).
@@ -80,7 +95,7 @@ This object has the same properties as router, with other ones:
   </tr>
   <tr>
     <td><code>ServeOptions</code></td>
-    <td>{<br/><code>name</code>: string<br/><code>getPermissionStep</code>: GetPermissionCallback<br/><code>hasAddPermission</code>: RequestPermission<br/><code>hasEditPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
+    <td>{<br/><code>name</code>: string<br/><code>getPermissionStep</code>: GetPermissionCallback<br/><code>hasAddPermission</code>: (user: IUser, callback: RequestPermissionCallback)=>void)<br/><code>hasEditPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
     <td>Switch path <code>name</code> as the name label for UI purpose as complex objects.</td>
   </tr>
   <tr>
@@ -89,8 +104,11 @@ This object has the same properties as router, with other ones:
     <td>Callback called in order to get a pre-filter query (query), for a custom permissions setup.</td>
   </tr>
   <tr>
-    <td><code>RequestPermission(req, doc, callback)</code></td>
-    <td>req: <code>express.Request</code><br/>doc: <code>mongoose.Document</code><br/>callback: <code>RequestPermissionCallback</code></td>
+    <td>IUser</td><td>must be extend: { roles: ObjectId } & mongoose.Document</td><td>User used in order to set permissions and roles.</td>
+  </tr>
+  <tr>
+    <td><code>RequestPermission(user, doc, callback)</code></td>
+    <td>user: <code>IUser</code><br/>doc: <code>mongoose.Document</code><br/>callback: <code>RequestPermissionCallback</code></td>
     <td>called on interaction with an endpoint rest (post, put, patch or delete)</td>
   </tr>
   <tr>
@@ -105,4 +123,4 @@ This object has the same properties as router, with other ones:
 
 ### Next features
 - API rest self documented
-- UI permissions on users and roles
+- Permissions and roles inheritance
