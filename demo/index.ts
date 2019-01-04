@@ -33,7 +33,7 @@ const provider = mongoose.model('Provider', new mongoose.Schema({
 }))
 
 router.setGlobalRoute('')
-router.setPermissionsModel(mongoose)
+router.setConnection(mongoose)
 router.setModel('/customer', customer, { name: 'name' })
 router.setModel('/provider', provider)
 app.use('/', router)

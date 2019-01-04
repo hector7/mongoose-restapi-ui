@@ -299,7 +299,7 @@ class RouterTestPermissions {
             req.user.roles = [adminId]
             next()
         })
-        router.setPermissionsModel(RouterTestPermissions.connection)
+        router.setConnection(RouterTestPermissions.connection)
         router.setGlobalRoute('/')
         RouterTestPermissions.emm = router.setModel(`/${PROVIDER}`, RouterTestPermissions.provider)
         router.setModel(`/${CUSTOMER}`, RouterTestPermissions.customer, { name: 'name' })
@@ -560,7 +560,7 @@ class RouterTestPermissionsEndPoints {
             req.user = new user({ roles: [idAdmin] })
             next()
         })
-        router.setPermissionsModel(RouterTestPermissionsEndPoints.connection)
+        router.setConnection(RouterTestPermissionsEndPoints.connection)
         router.setGlobalRoute('/')
         const hasAdminPermission = (req, doc, callback) => {
             callback(null, true)
