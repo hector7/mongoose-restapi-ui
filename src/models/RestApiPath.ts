@@ -340,7 +340,7 @@ export default class RestApiPath {
                     cursor.count((err, count) => {
                         if (err) return res.status(500).send(err.message)
                         const page = $page ? $page : 1
-                        const rowsPerPage = $rowsPerPage ? $rowsPerPage : this.MAX_RESULTS
+                        const rowsPerPage = $rowsPerPage ? parseInt($rowsPerPage) : this.MAX_RESULTS
                         if ($sortBy) {
                             cursor = cursor.sort({ [$sortBy]: $sort ? $sort : 1 })
                         }
