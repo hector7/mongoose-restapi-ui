@@ -27,7 +27,7 @@ function ApiRouter(...args): ApiRouter {
     }
     router.publishUiTree = () => {
         return (req, res) => {
-            res.send(models)
+            res.send(Object.keys(models).map(key => models[key]))
         }
     }
 
