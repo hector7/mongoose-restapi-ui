@@ -211,6 +211,7 @@ export default class RestApiPath<T extends Document> {
                 let newObject = {
                     name: base,
                     complex: true,
+                    type: 'Object',
                     children: [{
                         ...el,
                         name: el.name.split('.').slice(1).join('.')
@@ -367,22 +368,23 @@ export default class RestApiPath<T extends Document> {
         this.router.get(`${this.route}`, (req: UserRequest, res: Response) => {
             permission.getReadQuery(req.user, (err, query) => {
                 if (err) return res.status(500).send(err.message)
-                const { $page, $sort, $sortBy, ...others } = req.query
+                const { $page, $rowsPerPage, $sort, $sortBy, ...others } = req.query
                 getQuery(models, this.model, this, others, query, (err, cursor: DocumentQuery<T, T>) => {
                     if (err) return res.status(500).send(err.message)
                     cursor.count((err, count) => {
                         if (err) return res.status(500).send(err.message)
                         const page = $page ? $page : 1
+                        const rowsPerPage = $rowsPerPage ? parseInt($rowsPerPage) : this.MAX_RESULTS
                         if ($sortBy) {
                             cursor = cursor.sort({ [$sortBy]: $sort ? $sort : 1 })
                         }
                         cursor
-                            .skip((parseInt(page) - 1) * this.MAX_RESULTS)
-                            .limit(this.MAX_RESULTS)
+                            .skip((parseInt(page) - 1) * rowsPerPage)
+                            .limit(rowsPerPage)
                             .find((err, results) => {
                                 if (err) return res.status(500).send(err.message)
                                 return res.send({
-                                    total_pages: Math.ceil(count / this.MAX_RESULTS),
+                                    total_pages: Math.ceil(count / rowsPerPage),
                                     page,
                                     count,
                                     results

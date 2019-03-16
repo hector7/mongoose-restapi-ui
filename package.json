@@ -1,6 +1,6 @@
 {
   "name": "mongoose-restapi-ui",
-  "version": "1.3.0",
+  "version": "1.4.2",
   "description": "",
   "main": "src/router.js",
   "scripts": {
@@ -14,7 +14,6 @@
     "watch": "mocha-typescript-watch"
   },
   "author": "Hector Ribes",
-  "license": "ISC",
   "dependencies": {
     "express": "^4.16.4",
     "mock-require": "^3.0.2",

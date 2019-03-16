@@ -776,8 +776,8 @@ class RouterTestPermissionsEndPoints {
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
-                res.body.should.be.a('object');
-                Object.keys(res.body).length.should.be.eql(2)
+                res.body.should.be.a('array');
+                res.body.length.should.be.eql(2)
                 done();
             });
     }

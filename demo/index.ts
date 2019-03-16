@@ -38,7 +38,7 @@ router.setModel('/customer', customer, { name: 'name' })
 router.setModel('/provider', provider)
 app.use('/', router)
 app.get('/tree', router.publishUiTree())
-app.listen(3000, () => {
+app.listen(3030, () => {
     console.log('Express server listening on port 3000')
 })
 module.exports = {
