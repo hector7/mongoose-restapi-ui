@@ -41,7 +41,7 @@ class RestApiPathTest {
         RestApiPathTest.customer = RestApiPathTest.connection.model(CUSTOMER, customerSchema);
         RestApiPathTest.provider = RestApiPathTest.connection.model(PROVIDER, providerSchema);
 
-        const router = ApiRouter({strict: true})
+        const router = ApiRouter()
         router.setGlobalRoute('/')
         router.setModel(`/${PROVIDER}`, RestApiPathTest.provider)
         router.setModel(`/${CUSTOMER}`, RestApiPathTest.customer, { name: 'name' })
@@ -71,14 +71,18 @@ class RestApiPathTest {
         chai.request(RestApiPathTest.server)
             .get(`/${CUSTOMER}`)
             .end((err, res) => {
-                if (err) return done(err)
-                res.should.have.status(200)
-                res.body.total_pages.should.be.eql(0)
-                res.body.count.should.be.eql(0)
-                res.body.page.should.be.eql(1)
-                res.body.results.should.be.a('array')
-                res.body.results.length.should.be.eql(0)
-                done()
+                chai.request(RestApiPathTest.server)
+                    .get(`/${CUSTOMER}`)
+                    .end((err, res) => {
+                        if (err) return done(err)
+                        res.should.have.status(200)
+                        res.body.total_pages.should.be.eql(0)
+                        res.body.count.should.be.eql(0)
+                        res.body.page.should.be.eql(1)
+                        res.body.results.should.be.a('array')
+                        res.body.results.length.should.be.eql(0)
+                        done()
+                    })
             })
     }
     @test("should get all Provider objects")

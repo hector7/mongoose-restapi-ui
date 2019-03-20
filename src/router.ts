@@ -15,7 +15,7 @@ type ApiRouter = Router & {
 function ApiRouter(...args): ApiRouter {
     let models = {}
     const router: ApiRouter = Router(...args)
-    let globalRoute = ''
+    let globalRoute = '/'
     router.setGlobalRoute = (path: string) => {
         globalRoute = path
     }

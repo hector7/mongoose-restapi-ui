@@ -6,7 +6,7 @@
   "scripts": {
     "start": "ts-node ./demo/index.ts",
     "prepublishOnly": "tsc --declaration",
-    "pretest": "tsc",
+    "pretest": "find src -name \"*.d.ts\" -type f -delete && find src -name \"*.js\" -type f -delete && find src -name \"*.js.map\" -type f -delete && tsc",
     "test": "nyc mocha",
     "precoverage": "nyc report --reporter=cobertura",
     "html": "nyc report --reporter=html",
@@ -56,6 +56,6 @@
     "lines": 90,
     "statements": 90,
     "functions": 90,
-    "branches": 90
+    "branches": 85
   }
 }

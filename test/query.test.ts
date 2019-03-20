@@ -1,5 +1,5 @@
 import "mocha-typescript";
-import getQuery, { CtxType } from '../src/models/query'
+import getQuery, { CtxType, Query } from '../src/models/query'
 import mongoose = require("mongoose");
 import { Schema, Document, Types } from 'mongoose'
 
@@ -16,7 +16,8 @@ type ICustomer = {
     objectid?: Types.ObjectId,
 }
 type IProvider = {
-    ref: Types.ObjectId
+    ref: Types.ObjectId,
+    name: String
 }
 
 const customerSchema = new Schema({
@@ -28,7 +29,8 @@ const customerSchema = new Schema({
 })
 
 const providerSchema = new Schema({
-    ref: { type: Schema.Types.ObjectId, ref: CUSTOMER }
+    ref: { type: Schema.Types.ObjectId, ref: CUSTOMER },
+    name: String
 })
 
 type ICustomerModel = ICustomer & Document
@@ -114,6 +116,9 @@ describe('SimpleQueryTest', () => {
             ref: {
                 type: 'Ref',
                 to: CUSTOMER
+            },
+            name: {
+                type: 'String'
             }
         },
         isNumber: (field) => {
@@ -124,7 +129,7 @@ describe('SimpleQueryTest', () => {
         dateFullPaths: [],
         objectIdFullPaths: [],
         booleanFullPaths: [],
-        stringFullPaths: [],
+        stringFullPaths: ['name'],
         transformationMap: {},
         convertStep: {
             $addFields: {
@@ -141,7 +146,7 @@ describe('SimpleQueryTest', () => {
         Customer.find(callback)
     }
     before((done) => {
-        console.log('before')
+        new Query()
         //use q promises
         global.Promise = require("q").Promise;
 
@@ -156,7 +161,7 @@ describe('SimpleQueryTest', () => {
             Customer.insertMany(customerData, (error, customerDocs) => {
                 if (error) return done(error)
                 customerData = customerDocs
-                Provider.insertMany(customerDocs.map((el: ICustomerModel) => ({ ref: el._id })), (error) => {
+                Provider.insertMany(customerDocs.map((el: ICustomerModel) => ({ ref: el._id, name: 'Alice' })), (error, docs) => {
                     done(error)
                 })
             })
@@ -297,9 +302,38 @@ describe('SimpleQueryTest', () => {
             })
         })
     }
+    function createAnyRefTest(title, info: 'Provider', ref) {
+        it(title, (done) => {
+            const collection = Provider
+            const ctx = ProviderCtx
+            getQuery(getModels(), collection, ctx, { $any: ref }, null, (err, cursor) => {
+                if (err) return done(err)
+                cursor.should.exist;
+                cursor.find((err, docs) => {
+                    if (err) return done(err)
+                    if (ref === 'Alice' || JSON.stringify(ref) === '[]') {
+                        docs.length.should.equal(3)
+                        done()
+                    } else {
+                        const results = customerData.filter(el => {
+                            if (Array.isArray(ref))
+                                return ref.indexOf(el.name) >= 0
+                            return el.name === ref
+                        })
+                        docs.length.should.equal(results.length)
+                        docs.forEach((doc, key) => {
+                            doc.ref.toString().should.equal(results[key]._id.toString())
+                        })
+                        done()
+                    }
+                })
+            })
+        })
+    }
     createSimpleTest('find by string', 'Customer', { name: 'hector' })
     createSimpleTest('find by string', 'Customer', { name: 'hector' }, { name: 'hector' })
     createSimpleTest('find by number', 'Customer', { number: '1' })
+    createSimpleTest('find by number', 'Customer', { name: ['hector', '1'] })
     createSimpleTest('find by boolean', 'Customer', { boolean: 'true' })
     createSimpleTest('find by date', 'Customer', { date: JSON.stringify(date).slice(1, -1) })
     createSimpleTest('find by object id', 'Customer', { objectid: JSON.parse(JSON.stringify(objid)) })
@@ -314,7 +348,11 @@ describe('SimpleQueryTest', () => {
     createAnyTest('find by any boolean', 'Customer', 'true')
     createAnyTest('find by any date', 'Customer', date.getFullYear().toString())
     createAnyTest('find by any objectid', 'Customer', JSON.parse(JSON.stringify(objid)))
+    createRefTest('find by ref', 'Provider', 'jose')
     createRefTest('find by ref', 'Provider', 'hector')
+    createAnyRefTest('find by any ref empty array', 'Provider', [])
+    createAnyRefTest('find by any ref', 'Provider', 'hector')
+    createAnyRefTest('find by any ref alice', 'Provider', 'Alice')
     createRefTest('find by array ref', 'Provider', ['hector'])
     it('Find by ref with error', (done) => {
         const query = {
@@ -376,8 +414,8 @@ describe('SimpleQueryTest', () => {
             $any: ['hector', 'jose']
         }
         getQuery({}, Customer, CustomerCtx, query, null, (err, docs) => {
-            if (err) return done(null)
-            return done('must be unreachable this line')
+            if (err) return done(err)
+            return done()
         })
     })
     it('Find by type not contemplated not in schema', (done) => {
@@ -388,6 +426,9 @@ describe('SimpleQueryTest', () => {
             if (err) return done(null)
             done('this must be unreachable...')
         })
+    })
+    it('parseValue works correctly', () => {
+        JSON.stringify(Query.parseValue(['el'])).should.equal(JSON.stringify({ $in: ['el'] }))
     })
 })
 

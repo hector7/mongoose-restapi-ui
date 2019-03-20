@@ -2,6 +2,7 @@ import { Model, DocumentQuery } from 'mongoose'
 import { FullPathTypes, InfoModel } from '../definitions/model'
 import * as utils from '../utils'
 import { Cursor } from 'mongodb';
+import { domainToASCII } from 'url';
 
 export type CtxType = {
     convertStep: { $addFields: { [key: string]: any } }
@@ -16,7 +17,7 @@ export type CtxType = {
     transformationMap: { [key: string]: string }
 }
 
-class Query {
+export class Query {
 
     static matchAny(ctx, value) {
         const stringPaths = ctx.stringFullPaths.map(sk => ({ [sk]: Query.parseValue(value, utils.containsStringFx) }))
@@ -38,6 +39,7 @@ class Query {
             const objectidPaths = ctx.objectIdFullPaths.map(sk => ({ [ctx.transformationMap[sk]]: Query.parseValue(value) }))
             return { query: { $or: stringPaths.concat(objectidPaths) }, type: 'objectid' }
         }
+        if (stringPaths.length === 0) return { query: { _id: null }, type: 'match' }
         return { query: { $or: stringPaths }, type: 'match' }
     }
 
@@ -82,23 +84,49 @@ class Query {
         return Object.keys(val).some(el => ctx.refFullPaths.indexOf(el) >= 0)
     }
 
-    static mapAnyResultStep(docs) {
-        return { _id: { $in: docs.map(el => el._id) } }
-    }
-    static getAnyIdsStep(model: Model<any>, ctx: CtxType, val, prevFilter: any, callback: (err: Error, query?: any) => void) {
-        const query = Query.matchAny(ctx, val.$any)
+    static getDocsAnyIdsStep(model: Model<any>, ctx: CtxType, val: string, prevFilter: any, callback: (err: Error, query?: any) => void) {
+        const query = Query.matchAny(ctx, val)
         if (query.type !== 'match') {
             const match = prevFilter ? [{ $match: prevFilter }] : []
             return model.aggregate([...match, ctx.convertStep, { $match: query.query }]).exec((err, docs) => {
                 if (err) return callback(err)
-                callback(null, Query.mapAnyResultStep(docs))
+                callback(null, docs)
             })
         }
         const match = prevFilter ? { $and: [query.query, prevFilter] } : query.query
         return model.find(match, { _id: 1 }, (err, docs) => {
             if (err) return callback(err)
-            callback(null, Query.mapAnyResultStep(docs))
+            callback(null, docs)
         })
+    }
+    static getAnyIdsStep(model: Model<any>, ctx: CtxType, val, prevFilter: any, callback: (err: Error, query?: any) => void) {
+        if (Array.isArray(val.$any)) {
+            let processed = 0
+            let target = val.$any.length
+            let send = false
+            let result = []
+            if (target === 0) return callback(null, [])
+            return val.$any.forEach(el => {
+                Query.getDocsAnyIdsStep(model, ctx, el, prevFilter, (err, query) => {
+                    if (!send) {
+                        if (err) return callback(err)
+                        processed++
+                        result = result.concat(query)
+                        if (processed === target) {
+                            return callback(null, result)
+                        }
+                    }
+                })
+            })
+        }
+        Query.getDocsAnyIdsStep(model, ctx, val.$any, prevFilter, callback)
+    }
+
+    static getRefStepFromRefKey(refKey: string, models: { [key: string]: InfoModel }, ctx: CtxType, value,
+        callback: (err: Error, query?: any) => void, parseFx = (el: string): any => el) {
+        const targetInfoModel = models[ctx.fullPathTypes[refKey].to]
+        const targetModel: Model<any> = targetInfoModel.model
+        targetModel.find({ [targetInfoModel.label]: parseFx(value) }, { _id: 1 }, callback)
     }
 
     static getRefIdStep(models: { [key: string]: InfoModel }, ctx: CtxType, val,
@@ -106,11 +134,7 @@ class Query {
         const refsKeys = Object.keys(val).filter(key => ctx.refFullPaths.indexOf(key) >= 0)
         let targetDocs = []
         refsKeys.forEach(refKey => {
-            const cb = (err, docs) => {
-            }
-            const targetInfoModel = models[ctx.fullPathTypes[refKey].to]
-            const targetModel: Model<any> = targetInfoModel.model
-            targetModel.find({ [targetInfoModel.label]: val[refKey] }, { _id: 1 }, (err, docs) => {
+            Query.getRefStepFromRefKey(refKey, models, ctx, val[refKey], (err, docs) => {
                 if (err) return callback(err)
                 targetDocs.push({ [refKey]: { $in: docs.map(el => el._id) } })
                 if (targetDocs.length === refsKeys.length)
@@ -127,17 +151,69 @@ function doQuery(model: Model<any>, ctx: CtxType, value,
         return callback(null, model.find(query))
     }
     const match = Query.getMatch(ctx, value, query)
+    if (match.$and.length === 0) return callback(null, model.find(prevFilter ? prevFilter : {}))
     if (prevFilter)
         return callback(null, model.find({ $and: [match, prevFilter] }))
     return callback(null, model.find(match))
 }
 
-function checkAnyOperator(model: Model<any>, ctx: CtxType, value,
+function getRefResultFromAnyStep(models: { [key: string]: InfoModel }, ctx: CtxType, val: string | string[], callback: (err: Error, query?: any) => void) {
+    if (ctx.refFullPaths.length === 0) return callback(null, [])
+    let targetDocs = []
+    let processed = 0
+    ctx.refFullPaths.forEach(refKey => {
+        Query.getRefStepFromRefKey(refKey, models, ctx, val, (err, docs) => {
+            if (err) return callback(err)
+            processed++
+            if (docs.length > 0)
+                targetDocs.push({ [refKey]: { $in: docs.map(el => el._id) } })
+            if (processed === ctx.refFullPaths.length)
+                return callback(null, targetDocs)
+        }, utils.containsStringFx)
+    })
+}
+function getRefFromAnyStep(models: { [key: string]: InfoModel }, ctx: CtxType, val: string | string[], callback: (err: Error, query?: any) => void) {
+    if (Array.isArray(val)) {
+        let processed = 0
+        let target = val.length
+        let send = false
+        let result = []
+        if (target === 0) return callback(null, [])
+        return val.forEach(el => {
+            getRefResultFromAnyStep(models, ctx, el, (err, query) => {
+                if (!send) {
+                    if (err) return callback(err)
+                    processed++
+                    result = result.concat(query)
+                    if (processed === target) {
+                        return callback(null, result)
+                    }
+                }
+            })
+        })
+    }
+    getRefResultFromAnyStep(models, ctx, val, callback)
+}
+
+function checkAnyOperator(models: { [key: string]: InfoModel }, model: Model<any>, ctx: CtxType, value,
     query: any[], prevFilter: any, callback: (err: Error, docs?: DocumentQuery<any, any>) => void) {
     if (Query.hasAnyOp(value)) {
-        return Query.getAnyIdsStep(model, ctx, value, prevFilter, (err, res) => {
+        return getRefFromAnyStep(models, ctx, value.$any, (err, ids) => {
             if (err) return callback(err)
-            doQuery(model, ctx, value, query.concat(res), prevFilter, callback)
+            return Query.getAnyIdsStep(model, ctx, value, prevFilter, (err, res) => {
+                if (err) return callback(err)
+                let anyIdStep = { _id: { $in: res.map(el => el._id) } }
+                let aggr = query
+                if (res.length > 0 && ids.length > 0) {
+                    aggr.push({ $or: [{ $and: ids }, anyIdStep] })
+                } else {
+                    if (res.length > 0)
+                        aggr.push(anyIdStep)
+                    if (ids.length > 0)
+                        aggr = aggr.concat(ids)
+                }
+                doQuery(model, ctx, value, aggr, prevFilter, callback)
+            })
         })
     }
     doQuery(model, ctx, value, query, prevFilter, callback)
@@ -145,14 +221,13 @@ function checkAnyOperator(model: Model<any>, ctx: CtxType, value,
 
 export default (models: { [key: string]: InfoModel }, model: Model<any>,
     ctx: CtxType, query: any, prevFilter: any, callback: (err: Error, cursor?: DocumentQuery<any, any>) => void) => {
-    new Query()
     if (Object.keys(query).filter(key => ctx.fullPathTypes[key] === undefined && key !== '$any').length > 0)
         return callback(new Error('query has an attribute not in mongoose model.'))
     if (Query.hasAnyRef(ctx, query)) {
         return Query.getRefIdStep(models, ctx, query, (err, ids) => {
             if (err) return callback(err)
-            checkAnyOperator(model, ctx, query, ids, prevFilter, callback)
+            checkAnyOperator(models, model, ctx, query, ids, prevFilter, callback)
         })
     }
-    checkAnyOperator(model, ctx, query, [], prevFilter, callback)
+    checkAnyOperator(models, model, ctx, query, [], prevFilter, callback)
 }
