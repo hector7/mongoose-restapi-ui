@@ -1,11 +1,8 @@
-import { Model, DocumentQuery } from 'mongoose'
-import { FullPathTypes, InfoModel } from '../definitions/model'
+import { InfoModel, FullPathTypes } from "../definitions/model";
+import { Model, DocumentQuery, Types } from 'mongoose'
 import * as utils from '../utils'
-import { Cursor } from 'mongodb';
-import { domainToASCII } from 'url';
 
 export type CtxType = {
-    convertStep: { $addFields: { [key: string]: any } }
     fullPathTypes: FullPathTypes,
     refFullPaths: string[]
     stringFullPaths: string[]
@@ -13,221 +10,231 @@ export type CtxType = {
     booleanFullPaths: string[]
     dateFullPaths: string[]
     objectIdFullPaths: string[]
-    isNumber: (field: string) => boolean
-    transformationMap: { [key: string]: string }
 }
-
 export class Query {
+    private models: { [key: string]: InfoModel }
+    private model: Model<any>
+    private modelDefinition: CtxType
+    private _query: { [key: string]: string | string[] }
+    private isMongo4: boolean
 
-    static matchAny(ctx, value) {
-        const stringPaths = ctx.stringFullPaths.map(sk => ({ [sk]: Query.parseValue(value, utils.containsStringFx) }))
-        let isnumber = utils.isNumber(value)
-        if (isnumber) {
-            const numberPaths = ctx.numberFullPaths.map(sk => ({ [ctx.transformationMap[sk]]: Query.parseValue(value, utils.containsStringFx) }))
-            if (value.length < 5 && parseInt(value)) {
-                const datePaths = ctx.dateFullPaths.map(sk => ({ [ctx.transformationMap[sk]]: Query.parseValue(value, utils.containsStringFx) }))
-                return { query: { $or: stringPaths.concat(numberPaths).concat(datePaths) }, type: 'number' }
-            }
-            //const numberPaths = fullPathNumber.map(sk => (parseValue(numbers(sk), containsNumberFx, '$or')))
-            return { query: { $or: stringPaths.concat(numberPaths) }, type: 'number' }
-        }
-        if (value === 'true' || value === 'false') {
-            const booleanPaths = ctx.booleanFullPaths.map(sk => ({ [ctx.transformationMap[sk]]: Query.parseValue(value) }))
-            return { query: { $or: stringPaths.concat(booleanPaths) }, type: 'boolean' }
-        }
-        if (value.length === 24) {
-            const objectidPaths = ctx.objectIdFullPaths.map(sk => ({ [ctx.transformationMap[sk]]: Query.parseValue(value) }))
-            return { query: { $or: stringPaths.concat(objectidPaths) }, type: 'objectid' }
-        }
-        if (stringPaths.length === 0) return { query: { _id: null }, type: 'match' }
-        return { query: { $or: stringPaths }, type: 'match' }
+    constructor(ctx: CtxType, query: { [key: string]: string | string[] }, models: { [key: string]: InfoModel }, model: Model<any>, mongo4: boolean) {
+        this.models = models
+        this.model = model
+        this._query = query
+        this.modelDefinition = ctx
+        this.isMongo4 = mongo4
     }
-
-    static parseValue(val, fn = el => el, key = '$in') {
+    get hasAny() {
+        return Object.keys(this._query).indexOf('$any') > -1
+    }
+    get hasRefs() {
+        if (this.modelDefinition.refFullPaths.length > 0) {
+            return this.hasAny || Object.keys(this._query).some(field => this.modelDefinition.refFullPaths.indexOf(field) > -1)
+        }
+        return false
+    }
+    get refPaths() {
+        if (this.hasAny)
+            return this.modelDefinition.refFullPaths
+        return Object.keys(this._query).filter(field => this.modelDefinition.refFullPaths.indexOf(field) > -1)
+    }
+    get numberPaths() {
+        return this.modelDefinition.numberFullPaths
+    }
+    get booleanPaths() {
+        return this.modelDefinition.booleanFullPaths
+    }
+    get datePaths() {
+        return this.modelDefinition.dateFullPaths
+    }
+    get objectIdPaths() {
+        return this.modelDefinition.objectIdFullPaths
+    }
+    parseQueryValue(val: string | string[], fn = (el: string): any => el) {
         if (Array.isArray(val))
-            return { [key]: val.map(fn) }
+            return { $in: val.map(fn) }
         return fn(val)
     }
-
-    static getMatch(ctx: CtxType, query, predefined) {
-        function parseValue(val, fn = el => el, key = '$in') {
-            if (Array.isArray(val))
-                return { [key]: val.map(fn) }
-            return fn(val)
+    getValuesContains(fields: string[], val: string | string[]): { [key: string]: { $regex: string, $options: string } }[] {
+        if (Array.isArray(val)) {
+            let res = []
+            val.forEach(subVal => {
+                res = res.concat(fields.map(field => {
+                    return { [field]: utils.containsStringFx(subVal) }
+                }))
+            })
+            return res
         }
-        return {
-            $and: Object.keys(query)
-                .filter(key => key !== '$any')
-                .filter(key => ctx.refFullPaths.indexOf(key) < 0)
-                .map(el => {
-                    const value = query[el]
-                    if (ctx.fullPathTypes[el].type === 'Number') {
+        return fields.map(field => {
+            return { [field]: utils.containsStringFx(val) }
+        })
+    }
+    _anyOperatorQuery(val: string | string[]) {
+        let query: any[] = this.getValuesContains(this.modelDefinition.stringFullPaths.concat(this.modelDefinition.refFullPaths), val)
+        if (this.isMongo4) {
+            query = query.concat(this.getValuesContains(this.numberPaths
+                .concat(this.booleanPaths)
+                .concat(this.datePaths)
+                .concat(this.objectIdPaths), val))
+        }
+        if (Array.isArray(val)) {
+            val.forEach(subVal => {
+                query = query.concat(this.modelDefinition.booleanFullPaths.filter(path => path === subVal).map(path => ({
+                    [path]: true
+                })))
+            })
+        } else {
+            query = query.concat(this.modelDefinition.booleanFullPaths.filter(path => path === val).map(path => ({
+                [path]: true
+            })))
+        }
+        if (!this.isMongo4) {
+            if (Array.isArray(val)) {
+                const numbers = val.filter(utils.isNumber)
+                const boolean = val.filter(v => v === 'true' || v === 'false')
+                if (numbers.length > 0) {
+                    query = query.concat(this.modelDefinition.numberFullPaths.map(numberField => {
+                        return { [numberField]: this.parseQueryValue(numbers, utils.parseNumberFx) }
+                    }))
+                }
+                if (boolean.length > 0) {
+                    query = query.concat(this.modelDefinition.booleanFullPaths.map(booleanField => {
                         return {
-                            [el]: parseValue(value, utils.parseNumberFx)
+                            [booleanField]: this.parseQueryValue(boolean, el => JSON.parse(el))
                         }
-                    }
-                    if (ctx.fullPathTypes[el].type === 'ObjectId') {
-                        return { [el]: parseValue(value, utils.parseObjectId) }
-                    }
-                    return {
-                        [el]: parseValue(value)
-                    }
-                }).concat(predefined)
-        }
-    }
-
-    static hasAnyOp(val): boolean {
-        return Object.keys(val).some(el => el === '$any')
-    }
-
-    static hasAnyRef(ctx: CtxType, val): boolean {
-        return Object.keys(val).some(el => ctx.refFullPaths.indexOf(el) >= 0)
-    }
-
-    static getDocsAnyIdsStep(model: Model<any>, ctx: CtxType, val: string, prevFilter: any, callback: (err: Error, query?: any) => void) {
-        const query = Query.matchAny(ctx, val)
-        if (query.type !== 'match') {
-            const match = prevFilter ? [{ $match: prevFilter }] : []
-            return model.aggregate([...match, ctx.convertStep, { $match: query.query }]).exec((err, docs) => {
-                if (err) return callback(err)
-                callback(null, docs)
-            })
-        }
-        const match = prevFilter ? { $and: [query.query, prevFilter] } : query.query
-        return model.find(match, { _id: 1 }, (err, docs) => {
-            if (err) return callback(err)
-            callback(null, docs)
-        })
-    }
-    static getAnyIdsStep(model: Model<any>, ctx: CtxType, val, prevFilter: any, callback: (err: Error, query?: any) => void) {
-        if (Array.isArray(val.$any)) {
-            let processed = 0
-            let target = val.$any.length
-            let send = false
-            let result = []
-            if (target === 0) return callback(null, [])
-            return val.$any.forEach(el => {
-                Query.getDocsAnyIdsStep(model, ctx, el, prevFilter, (err, query) => {
-                    if (!send) {
-                        if (err) return callback(err)
-                        processed++
-                        result = result.concat(query)
-                        if (processed === target) {
-                            return callback(null, result)
+                    }))
+                }
+                if (val.some(subval => subval.length === 24)) {
+                    query = query.concat(this.modelDefinition.objectIdFullPaths.map(objectIdField => {
+                        return {
+                            [objectIdField]: this.parseQueryValue(val.filter(subval => subval.length === 24), el => Types.ObjectId(el))
                         }
-                    }
-                })
-            })
+                    }))
+                }
+            } else {
+                if (utils.isNumber(val)) {
+                    query = query.concat(this.modelDefinition.numberFullPaths.map(numberField => {
+                        return { [numberField]: this.parseQueryValue(val, utils.parseNumberFx) }
+                    }))
+                }
+                if (val === 'true' || val === 'false') {
+                    query = query.concat(this.modelDefinition.booleanFullPaths.map(booleanField => {
+                        return { [booleanField]: this.parseQueryValue(val) }
+                    }))
+                }
+                if (val.length === 24) {
+                    query = query.concat(this.modelDefinition.objectIdFullPaths.map(objectIdField => {
+                        return {
+                            [objectIdField]: this.parseQueryValue(val, el => Types.ObjectId(el))
+                        }
+                    }))
+                }
+            }
         }
-        Query.getDocsAnyIdsStep(model, ctx, val.$any, prevFilter, callback)
+        if (query.length > 0) return { $or: query }
+        return {}
     }
-
-    static getRefStepFromRefKey(refKey: string, models: { [key: string]: InfoModel }, ctx: CtxType, value,
-        callback: (err: Error, query?: any) => void, parseFx = (el: string): any => el) {
-        const targetInfoModel = models[ctx.fullPathTypes[refKey].to]
-        const targetModel: Model<any> = targetInfoModel.model
-        targetModel.find({ [targetInfoModel.label]: parseFx(value) }, { _id: 1 }, callback)
+    get _basicQuery() {
+        const { $any, ...others } = this._query
+        const query = Object.keys(others).map(field => {
+            const value = others[field]
+            if (this.modelDefinition.fullPathTypes[field].type === 'Number') {
+                return {
+                    field,
+                    value: this.parseQueryValue(value, utils.parseNumberFx)
+                }
+            }
+            if (this.modelDefinition.fullPathTypes[field].type === 'ObjectId') {
+                return { field, value: this.parseQueryValue(value, utils.parseObjectId) }
+            }
+            return {
+                field, value: this.parseQueryValue(value)
+            }
+        }).reduce((obj: { [key: string]: any }, next: { field: string, value: any }) => {
+            obj[next.field] = next.value
+            return obj
+        }, {})
+        if (this.hasAny && Object.keys(query).length > 0)
+            return { $and: [query, this._anyOperatorQuery($any)] }
+        if (this.hasAny)
+            return this._anyOperatorQuery($any)
+        return query
     }
-
-    static getRefIdStep(models: { [key: string]: InfoModel }, ctx: CtxType, val,
-        callback: (err: Error, query?: any) => void) {
-        const refsKeys = Object.keys(val).filter(key => ctx.refFullPaths.indexOf(key) >= 0)
-        let targetDocs = []
-        refsKeys.forEach(refKey => {
-            Query.getRefStepFromRefKey(refKey, models, ctx, val[refKey], (err, docs) => {
-                if (err) return callback(err)
-                targetDocs.push({ [refKey]: { $in: docs.map(el => el._id) } })
-                if (targetDocs.length === refsKeys.length)
-                    return callback(null, targetDocs)
-            })
-        })
+    _convertStep(): any[] {
+        let aggregation = []
+        if (this.isMongo4 && this.hasAny) {
+            if ((this.numberPaths.length + this.booleanPaths.length + this.datePaths.length + this.objectIdPaths.length) > 0) {
+                aggregation = [{
+                    $addFields: this.numberPaths.concat(this.booleanPaths).concat(this.datePaths).concat(this.objectIdPaths).reduce((el: any, path) => {
+                        el[path] = { $convert: { input: `$${path}`, to: 'string', onError: '', onNull: '' } }
+                        return el
+                    }, {})
+                }]
+            }
+        }
+        return aggregation
     }
-}
-
-function doQuery(model: Model<any>, ctx: CtxType, value,
-    query: any[], prevFilter: any, callback: (err: Error, docs?: DocumentQuery<any, any>) => void) {
-    if (Object.keys(value).length === 0) {
-        const query = prevFilter ? prevFilter : {}
-        return callback(null, model.find(query))
-    }
-    const match = Query.getMatch(ctx, value, query)
-    if (match.$and.length === 0) return callback(null, model.find(prevFilter ? prevFilter : {}))
-    if (prevFilter)
-        return callback(null, model.find({ $and: [match, prevFilter] }))
-    return callback(null, model.find(match))
-}
-
-function getRefResultFromAnyStep(models: { [key: string]: InfoModel }, ctx: CtxType, val: string | string[], callback: (err: Error, query?: any) => void) {
-    if (ctx.refFullPaths.length === 0) return callback(null, [])
-    let targetDocs = []
-    let processed = 0
-    ctx.refFullPaths.forEach(refKey => {
-        Query.getRefStepFromRefKey(refKey, models, ctx, val, (err, docs) => {
-            if (err) return callback(err)
-            processed++
-            if (docs.length > 0)
-                targetDocs.push({ [refKey]: { $in: docs.map(el => el._id) } })
-            if (processed === ctx.refFullPaths.length)
-                return callback(null, targetDocs)
-        }, utils.containsStringFx)
-    })
-}
-function getRefFromAnyStep(models: { [key: string]: InfoModel }, ctx: CtxType, val: string | string[], callback: (err: Error, query?: any) => void) {
-    if (Array.isArray(val)) {
-        let processed = 0
-        let target = val.length
-        let send = false
-        let result = []
-        if (target === 0) return callback(null, [])
-        return val.forEach(el => {
-            getRefResultFromAnyStep(models, ctx, el, (err, query) => {
-                if (!send) {
-                    if (err) return callback(err)
-                    processed++
-                    result = result.concat(query)
-                    if (processed === target) {
-                        return callback(null, result)
+    query(callback) {
+        const convertStep: any[] = this._convertStep()
+        if (this.hasRefs) {
+            let aggregation: any[] = this.refPaths.map(el => {
+                const targetModel = this.models[this.modelDefinition.fullPathTypes[el].to]
+                return {
+                    $lookup: {
+                        from: targetModel.model.collection.name,
+                        localField: el,
+                        foreignField: '_id',
+                        as: el
                     }
                 }
             })
-        })
-    }
-    getRefResultFromAnyStep(models, ctx, val, callback)
-}
-
-function checkAnyOperator(models: { [key: string]: InfoModel }, model: Model<any>, ctx: CtxType, value,
-    query: any[], prevFilter: any, callback: (err: Error, docs?: DocumentQuery<any, any>) => void) {
-    if (Query.hasAnyOp(value)) {
-        return getRefFromAnyStep(models, ctx, value.$any, (err, ids) => {
-            if (err) return callback(err)
-            return Query.getAnyIdsStep(model, ctx, value, prevFilter, (err, res) => {
-                if (err) return callback(err)
-                let anyIdStep = { _id: { $in: res.map(el => el._id) } }
-                let aggr = query
-                if (res.length > 0 && ids.length > 0) {
-                    aggr.push({ $or: [{ $and: ids }, anyIdStep] })
-                } else {
-                    if (res.length > 0)
-                        aggr.push(anyIdStep)
-                    if (ids.length > 0)
-                        aggr = aggr.concat(ids)
+            aggregation = aggregation.concat([
+                {
+                    $addFields: this.refPaths.reduce((el: any, path) => {
+                        const targetModel = this.models[this.modelDefinition.fullPathTypes[path].to]
+                        el[path] = `$${path}.${targetModel.label}`
+                        return el
+                    }, {})
                 }
-                doQuery(model, ctx, value, aggr, prevFilter, callback)
+            ])
+            aggregation = aggregation.concat(convertStep, [{
+                $match: this._basicQuery
+            }, {
+                $project: {
+                    _id: '$_id'
+                }
+            }])
+            return this.model.aggregate(aggregation, (err, res) => {
+                if (err) return callback(err)
+                callback(null, this.model.find({ _id: { $in: res.map(e => e._id) } }))
             })
-        })
+        }
+        if (convertStep.length > 0) {
+            return this.model.aggregate(convertStep.concat([{
+                $match: this._basicQuery
+            }, {
+                $project: {
+                    _id: '$_id'
+                }
+            }]), (err, res) => {
+                if (err) return callback(err)
+                callback(null, this.model.find({ _id: { $in: res.map(e => e._id) } }))
+            })
+        }
+        return callback(null, this.model.find(this._basicQuery))
     }
-    doQuery(model, ctx, value, query, prevFilter, callback)
 }
+export default (mongo4: boolean, models: { [key: string]: InfoModel }, model: Model<any>,
+    ctx: CtxType, query: { [key: string]: string | string[] }, prevFilter: any, callback: (err: Error, cursor?: DocumentQuery<any, any>) => void) => {
 
-export default (models: { [key: string]: InfoModel }, model: Model<any>,
-    ctx: CtxType, query: any, prevFilter: any, callback: (err: Error, cursor?: DocumentQuery<any, any>) => void) => {
-    if (Object.keys(query).filter(key => ctx.fullPathTypes[key] === undefined && key !== '$any').length > 0)
-        return callback(new Error('query has an attribute not in mongoose model.'))
-    if (Query.hasAnyRef(ctx, query)) {
-        return Query.getRefIdStep(models, ctx, query, (err, ids) => {
-            if (err) return callback(err)
-            checkAnyOperator(models, model, ctx, query, ids, prevFilter, callback)
-        })
-    }
-    checkAnyOperator(models, model, ctx, query, [], prevFilter, callback)
+    if (Object.keys(query).filter(key => key !== '$any').some(key => !ctx.fullPathTypes.hasOwnProperty(key)))
+        return callback(new Error(Object.keys(query).filter(key => key !== '$any').find(key => !ctx.fullPathTypes.hasOwnProperty(key)) + ' not in schema.'))
+    const q = new Query(ctx, Object.keys(query)
+        .filter(key => query[key].length > 0)
+        .reduce((obj: { [key: string]: string | string[] }, key) => {
+            obj[key] = query[key]
+            return obj
+        }, {}), models, model, mongo4)
+    return q.query(callback)
 }

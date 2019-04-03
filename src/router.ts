@@ -12,15 +12,16 @@ type ApiRouter = Router & {
     setGlobalRoute?: (string: string) => void
 }
 
-function ApiRouter(...args): ApiRouter {
+function ApiRouter(options = { isMongo4: false }): ApiRouter {
+    const { isMongo4, ...routerOptions } = options
     let models = {}
-    const router: ApiRouter = Router(...args)
+    const router: ApiRouter = Router(routerOptions)
     let globalRoute = '/'
     router.setGlobalRoute = (path: string) => {
         globalRoute = path
     }
     router.setModel = (route, model, serveOptions) => {
-        const { infoModel, emitter } = serveApi(router, route, model, models, serveOptions)
+        const { infoModel, emitter } = serveApi(router, route, model, models, serveOptions, isMongo4)
         infoModel.route = `${globalRoute}${route}`
         models[infoModel.name] = infoModel
         return emitter

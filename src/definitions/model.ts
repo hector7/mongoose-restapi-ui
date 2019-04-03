@@ -1,5 +1,5 @@
 import { Request } from 'express'
-import { Document } from 'mongoose';
+import { Document, Model } from 'mongoose';
 
 type RequiredAttrsPath = {
     name: string,
@@ -23,14 +23,14 @@ type FieldPath = RequiredAttrsPath & {
 }
 export type Path = FieldPath | ObjectPath | ArrayPath
 
-export type HasPermissionCallback = (error: Error, hasPermission: boolean, reason?: string) => void
+export type HasPermissionCallback = (error: Error | null, hasPermission: boolean, reason?: string) => void
 
-type GetPermissionCallback = (error: Error, query: any) => void
+type RequestFilterQuery = (req: Request, callback: (error: Error | null, query: { [key: string]: any }) => void) => void
 type EditPermision = (req: Request, doc: Document, callback: HasPermissionCallback) => void
 export type ServeOptions = {
     MAX_RESULTS?: number,
     name?: string,
-    getPermissionStep?: (callback: GetPermissionCallback) => void,
+    getFilterByPermissions?: RequestFilterQuery,
     hasEditPermission?: EditPermision,
     hasAddPermission?: EditPermision,
     hasUpdatePermission?: EditPermision,
@@ -41,7 +41,7 @@ export type InfoModel = {
     label: string,
     route: string,
     paths: Path[],
-    model: any
+    model: Model<any>
 }
 
 export type FullPathTypes = { type: string } | { type: 'Ref' | 'ArrayRef', to: string } | {}

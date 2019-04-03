@@ -15,6 +15,7 @@ class RestApiPathTest {
     public static customerRef
     public static connection: Connection
     public static server: Server
+    public static server2: Server
     public static customer: Model<any>
     public static provider: Model<any>
 
@@ -51,7 +52,19 @@ class RestApiPathTest {
             let chaiHttp = require('chai-http');
             chai.use(chaiHttp)
             chai.should();
-            done(error)
+            const app2 = express()
+            const router2 = ApiRouter({isMongo4: true})
+            router2.setGlobalRoute('/mongo4')
+            router2.setModel(`/${PROVIDER}`, RestApiPathTest.provider)
+            router2.setModel(`/${CUSTOMER}`, RestApiPathTest.customer, { name: 'name' })
+            app2.use('/', router2)
+            app2.get('/tree', router2.publishUiTree())
+            RestApiPathTest.server2 = app2.listen(3001, (error: Error) => {
+                let chaiHttp = require('chai-http');
+                chai.use(chaiHttp)
+                chai.should();
+                done(error)
+            })
         })
     }
     public static after(done) {
@@ -61,6 +74,8 @@ class RestApiPathTest {
                 if (error) return done(error)
                 RestApiPathTest.connection.close((error) => {
                     if (error) return done(error)
+                    RestApiPathTest.server.close()
+                    RestApiPathTest.server2.close()
                     done(error)
                 })
             })
