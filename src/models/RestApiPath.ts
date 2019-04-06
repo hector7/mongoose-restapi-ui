@@ -14,7 +14,7 @@ import PermissionClass from './PermissionClass';
 const defaultOptions = {
     MAX_RESULTS: 100,
     name: 'name',
-    getQuery: (user: IUser, callback) => {
+    getFilterByPermissions: (req: Request, callback) => {
         callback(null, null)
     }
 }
@@ -56,17 +56,16 @@ export default class RestApiPath<T extends Document> {
     private _objectIdFullPaths: string[]
     private _refFullPaths: string[]
     private _arrayFullPaths: string[]
-    private _convertStep: any = []
-    private _transformationMap: { [key: string]: string } = {}
-    private _projectionStep: { $project: { [key: string]: 1 } }
     private _fullPathTypes: FullPathTypes
-    constructor(router: Router, route: string, model: Model<T>, options: ServeOptions) {
+    private isMongo4: boolean
+    constructor(router: Router, route: string, model: Model<T>, options: ServeOptions, mongo4 = true) {
         routerWeakMap.set(this, router)
         this._options = getOptions(options)
         this._route = route
         this._model = model
         this._emitter = new EventEmitter()
         this._paths = this._getModelProperties(model.schema)
+        this.isMongo4 = mongo4
         this._generateFullPathTypes()
     }
 
@@ -110,18 +109,6 @@ export default class RestApiPath<T extends Document> {
         return this._refFullPaths
     }
 
-    get transformationMap() {
-        return this._transformationMap
-    }
-
-    get convertStep() {
-        return this._convertStep
-    }
-
-    get projectionStep() {
-        return this._projectionStep
-    }
-
     get fullPathTypes(): FullPathTypes {
         return this._fullPathTypes
     }
@@ -146,10 +133,6 @@ export default class RestApiPath<T extends Document> {
         return this._objectIdFullPaths
     }
 
-    isNumber(path: string): boolean {
-        return this._numberFullPaths.indexOf(path) >= 0
-    }
-
     private _generateFullPathTypes() {
         const fullPathTypes = this._getFullPathTypes()
         this._fullPathTypes = fullPathTypes
@@ -160,40 +143,6 @@ export default class RestApiPath<T extends Document> {
         this._arrayFullPaths = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath].type.startsWith('Array'))
         this._numberFullPaths = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath].type === 'Number' || fullPathTypes[fullPath].type === 'ArrayNumber')
         this._refFullPaths = Object.keys(fullPathTypes).filter(fullPath => fullPathTypes[fullPath].type === 'Ref' || fullPathTypes[fullPath].type === 'ArrayRef')
-        const otherFullPaths = Object.keys(fullPathTypes).filter(fullPath => this.stringFullPaths.indexOf(fullPath) < 0 && this.refFullPaths.indexOf(fullPath) < 0)
-        const usedPaths = [...Object.keys(fullPathTypes)]
-        function getPath(path) {
-            const newPath = `_${path}`
-            if (usedPaths.indexOf(newPath) < 0) {
-                usedPaths.push(newPath)
-                return newPath
-            }
-            return getPath(newPath)
-        }
-        if (otherFullPaths.length > 0) {
-            this._transformationMap = otherFullPaths.map(el => ({
-                key: el,
-                value: getPath(el)
-            })).reduce((obj, next) => {
-                obj[next.key] = next.value
-                return obj
-            }, {})
-            this._convertStep = {
-                $addFields: otherFullPaths.map(el => ({
-                    key: this.transformationMap[el],
-                    value: { $toString: `$${el}` }
-                })).reduce((obj, next) => {
-                    obj[next.key] = next.value
-                    return obj
-                }, {})
-            }
-        }
-        this._projectionStep = {
-            $project: Object.keys(fullPathTypes).reduce((obj, next) => {
-                obj[next] = 1
-                return obj
-            }, {})
-        }
     }
 
     private _getType = (type: string): string => {
@@ -214,16 +163,24 @@ export default class RestApiPath<T extends Document> {
                     type: 'Object',
                     children: [{
                         ...el,
-                        name: el.name.split('.').slice(1).join('.')
+                        name: el.name.split('.').slice(1).join('.'),
                     }].concat(this._transformPaths(pathsWithObject.slice(key + 1).filter(el => el.name.startsWith(base + '.')).map(el => ({
                         ...el,
-                        name: el.name.slice(base.length + 1)
+                        name: el.name.slice(base.length + 1),
                     }))))
                 }
                 pathsWithObject.slice(1).filter(el => el.name.startsWith(base + '.')).forEach(el => {
                     visited.push(el)
                 })
-                newObjects.push(newObject)
+                const labeledChild = newObject.children.find(child => child.label)
+                newObjects.push({
+                    ...newObject,
+                    label: labeledChild ? labeledChild.name : undefined,
+                    children: newObject.children.map(child => {
+                        const { label, ...others } = child
+                        return others
+                    })
+                })
             }
         })
         return pathsWithoutObject.concat(newObjects)
@@ -232,25 +189,34 @@ export default class RestApiPath<T extends Document> {
     private _getModelProperties(schema): Path[] {
         return this._transformPaths(Object.keys(schema.paths).map((key) => {
             const type = schema.paths[key].constructor.name
+            if (type === 'SchemaType') {
+                const children = schema.paths[key].schema
+                const labels = Object.keys(children.paths).filter(el => children.paths[el].options.label)
+                return {
+                    name: key,
+                    type: 'Object',
+                    label: labels.length > 0 ? labels.shift() : undefined,
+                    required: schema.requiredPaths(true).indexOf(key) >= 0,
+                    children: this._getModelProperties(schema.paths[key].schema)
+                }
+            }
             if (type === 'DocumentArray') {
                 const children = schema.paths[key].schema
                 const labels = Object.keys(children.paths).filter(el => children.paths[el].options.label)
-                // TODO Check if documentarray ever has schema object
-                //if (schema.paths[key].schema !== undefined) {
                 return {
                     name: key,
                     type: 'Array',
                     complex: true,
-                    label: labels.length > 0 ? labels.shift() : '_id',
+                    label: labels.length > 0 ? labels.shift() : undefined,
                     required: schema.requiredPaths(true).indexOf(key) >= 0,
                     children: this._getModelProperties(schema.paths[key].schema)
                 }
-                //}
             }
             if (type === 'ObjectId' && schema.paths[key].options.ref !== undefined) {
                 return {
                     name: key,
                     type: 'Ref',
+                    label: schema.paths[key].options.label,
                     to: schema.paths[key].options.ref
                 }
             }
@@ -260,12 +226,14 @@ export default class RestApiPath<T extends Document> {
                     return {
                         name: key,
                         type: 'ArrayRef',
+                        label: schema.paths[key].options.label,
                         required: schema.requiredPaths(true).indexOf(key) >= 0,
                         to: schema.paths[key].caster.options.ref
                     }
                 }
                 return {
                     name: key,
+                    label: schema.paths[key].options.label,
                     auto: schema.paths[key].options.auto,
                     type: 'Array' + schema.paths[key].caster.instance,
                     required: schema.requiredPaths(true).indexOf(key) >= 0
@@ -273,6 +241,7 @@ export default class RestApiPath<T extends Document> {
             }
             return {
                 name: key,
+                label: schema.paths[key].options.label,
                 auto: schema.paths[key].options.auto,
                 type: this._getType(schema.paths[key].constructor.name),
                 required: schema.requiredPaths(true).indexOf(key) >= 0
@@ -298,7 +267,7 @@ export default class RestApiPath<T extends Document> {
         return getFullPath(this.paths)
     }
 
-    public getItem(id: string, callback: (err?: Error, res?: T) => void): void {
+    public getItem(id: string, callback: (err: any, res?: any) => void) {
         this.model.findById(id, (err, res) => {
             if (err || !res) {
                 return this.model.findOne({ [this.options.name]: id }, callback)
@@ -356,6 +325,20 @@ export default class RestApiPath<T extends Document> {
             })
         })
 
+        this.router.use(this.route, (req: UserRequest, res, next) => {
+            if (!permission.checkUser(req.user)) return res.status(500).send(`<h1>Request needs mongodb user</h1>
+            <p>Fix it adding a middleware, useful for your project.</p>
+            <p>Example:</p>
+            <p><code>app.use("/", (req, res, next)=>{<br/>
+            &emsp;User.findOne({username: req.user}, (err, user)=>{<br/>
+            &emsp;&emsp;if(err) return next(err)<br/>
+            &emsp;&emsp;req.user = user<br/>
+            &emsp;&emsp;next()<br/>
+            &emsp;})<br/>
+            }</code>)</p>`)
+            next()
+        })
+
         this.router.use(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response, next) => {
             this.getItem(req.params.id, (err, item) => {
                 if (err) return res.status(500).send(err.message);
@@ -365,18 +348,35 @@ export default class RestApiPath<T extends Document> {
             })
         })
 
+
         this.router.get(`${this.route}`, (req: UserRequest, res: Response) => {
-            permission.getReadQuery(req.user, (err, query) => {
+            permission.getReadQuery(req, (err, query) => {
                 if (err) return res.status(500).send(err.message)
                 const { $page, $rowsPerPage, $sort, $sortBy, ...others } = req.query
-                getQuery(models, this.model, this, others, query, (err, cursor: DocumentQuery<T, T>) => {
+                if (Object.keys(others).filter(key => !this.fullPathTypes.hasOwnProperty(key) && key !== '$any').length > 0) {
+                    console.log('bad operation')
+                    console.log(query)
+                    console.log(Object.keys(others).filter(key => !this.fullPathTypes.hasOwnProperty(key)))
+                    return res.status(400).send('Path ' + Object.keys(others).find(key => !this.fullPathTypes.hasOwnProperty(key)) + ' not in schema')
+                }
+                getQuery(this.isMongo4, models, this.model, this, others, query, (err, cursor: DocumentQuery<T, T>) => {
                     if (err) return res.status(500).send(err.message)
                     cursor.count((err, count) => {
                         if (err) return res.status(500).send(err.message)
                         const page = $page ? $page : 1
                         const rowsPerPage = $rowsPerPage ? parseInt($rowsPerPage) : this.MAX_RESULTS
                         if ($sortBy) {
-                            cursor = cursor.sort({ [$sortBy]: $sort ? $sort : 1 })
+                            if (Array.isArray($sortBy)) {
+                                cursor = cursor.sort($sortBy.map((field, key) => ({
+                                    field,
+                                    direction: $sort && Array.isArray($sort) ? $sort[key] ? $sort[key] : 1 : $sort ? $sort : 1
+                                })).reduce((el: any, next) => {
+                                    el[next.field] = next.direction
+                                    return el
+                                }, {}))
+                            } else {
+                                cursor = cursor.sort({ [$sortBy]: $sort ? Array.isArray($sort) ? $sort.pop() : $sort : 1 })
+                            }
                         }
                         cursor
                             .skip((parseInt(page) - 1) * rowsPerPage)
@@ -395,17 +395,17 @@ export default class RestApiPath<T extends Document> {
             })
         });
         this.router.get(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            permission.hasReadPermission(req.user, req.doc, (err, hasPermission, reason) => {
+            permission.hasReadPermission(req, req.doc, (err: Error | null, hasPermission: boolean, reason?: string) => {
                 if (err) res.status(500).send(err.message)
                 if (!hasPermission) return res.status(403).send()
                 res.send(req.doc);
             })
         });
         this.router.post(`${this.route}`, (req: PermissionRequest<T>, res: Response) => {
-            if(!req.body) return res.status(401).send('body is empty')
+            if (!req.body) return res.status(401).send('body is empty')
             let item = new this.model(req.body)
             utils.replaceObjectIds(this.paths, item)
-            permission.hasAddPermission(req.user, (err, hasPermission, message) => {
+            permission.hasAddPermission(req, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     item.save((err, result) => {
@@ -422,9 +422,9 @@ export default class RestApiPath<T extends Document> {
             })
         });
         this.router.put(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            if(!req.body) return res.status(401).send('body is empty')
+            if (!req.body) return res.status(401).send('body is empty')
             const oldItem = req.doc.toObject()
-            permission.hasUpdatePermission(req.user, req.doc, (err, hasPermission, message) => {
+            permission.hasUpdatePermission(req, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     this.model.schema.eachPath(path => {
@@ -445,9 +445,9 @@ export default class RestApiPath<T extends Document> {
             });
         });
         this.router.patch(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            if(!req.body) return res.status(401).send('body is empty')
+            if (!req.body) return res.status(401).send('body is empty')
             const oldItem = req.doc.toObject()
-            permission.hasUpdatePermission(req.user, req.doc, (err, hasPermission, message) => {
+            permission.hasUpdatePermission(req, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     Object.keys(req.body).forEach(key => req.doc[key] = req.body[key]);
@@ -464,7 +464,7 @@ export default class RestApiPath<T extends Document> {
         });
 
         this.router.delete(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            permission.hasDeletePermission(req.user, req.doc, (err, hasPermission, message) => {
+            permission.hasDeletePermission(req, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
                 if (hasPermission) {
                     req.doc.remove((err, item) => {
@@ -483,7 +483,7 @@ export default class RestApiPath<T extends Document> {
 
 
         this.router.use(`${this.route}/:id/permission`, (req: PermissionRequest<T>, res: Response, next) => {
-            permission.hasAdminPermission(req.user, req.doc, (err, hasPermission) => {
+            permission.hasAdminPermission(req, req.doc, (err, hasPermission) => {
                 if (err) return res.status(500).send(err.message)
                 if (!hasPermission) return res.status(403).send()
                 next()

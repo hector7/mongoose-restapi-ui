@@ -43,7 +43,7 @@ class PermissionClassTest {
     }
     @test '_getReadObjects function handle mongoose error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
         const permissionModel: any = {
@@ -51,19 +51,21 @@ class PermissionClassTest {
                 cb(new Error('some error'))
             }
         }
-        const perm = new PermissionClass(PermissionClassTest.model, permissionModel, PermissionClassTest.role, { getQuery })
-        perm.getReadQuery(user, (err, query) => {
+        const perm = new PermissionClass(PermissionClassTest.model, permissionModel, PermissionClassTest.role, { getFilterByPermissions })
+        const req: any = { user }
+        perm.getReadQuery(req, (err, query) => {
             err.message.should.be.eql('some error')
             done()
         })
     }
     @test '_getReadObjects function 0 items'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
-        const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery })
-        perm.getReadQuery(user, (err, query) => {
+        const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions })
+        const req: any = { user }
+        perm.getReadQuery(req, (err, query) => {
             if (err) return done(err)
             query.should.be.eql({ _id: { $exists: false } })
             done()
@@ -71,14 +73,15 @@ class PermissionClassTest {
     }
     @test '_getReadObjects function 1 item'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object, permission: PermissionEnum.READ }).save((err, doc) => {
             if (err) return done(err)
-            const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery })
-            perm.getReadQuery(user, (err, query) => {
+            const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions })
+            const req: any = { user }
+            perm.getReadQuery(req, (err, query) => {
                 if (err) return done(err)
                 query.should.be.eql({ _id: { $in: [doc.object] } })
                 done()
@@ -87,7 +90,7 @@ class PermissionClassTest {
     }
     @test '_getReadObjects function +1 item'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
@@ -96,8 +99,9 @@ class PermissionClassTest {
             if (err) return done(err)
             new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object: object2, permission: PermissionEnum.READ }).save((err, doc2) => {
                 if (err) return done(err)
-                const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery })
-                perm.getReadQuery(user, (err, query) => {
+                const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions })
+                const req: any = { user }
+                perm.getReadQuery(req, (err, query) => {
                     if (err) return done(err)
                     query.should.be.eql({ _id: { $in: [doc.object, doc2.object] } })
                     done()
@@ -107,7 +111,8 @@ class PermissionClassTest {
     }
     @test '_getUserRoles function with no role function'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        new PermissionClass(PermissionClassTest.model, null, null, { getQuery: (a, cb) => cb(null, null) }).getReadQuery(user, (err, query) => {
+        const req: any = { user }
+        new PermissionClass(PermissionClassTest.model, null, null, { getFilterByPermissions: (a, cb) => cb(null, null) }).getReadQuery(req, (err, query) => {
             if (err) return done(err)
             if (query) return done(query)
             done()
@@ -115,8 +120,9 @@ class PermissionClassTest {
     }
     @test '_getUserRoles function with no roles setted'(done) {
         const user = new PermissionClassTest.user({})
-        new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-            .getReadQuery(user, (err, query) => {
+        const req: any = { user }
+        new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+            .getReadQuery(req, (err, query) => {
                 if (err) return done(err)
                 if (query) return done(query)
                 done()
@@ -124,8 +130,9 @@ class PermissionClassTest {
     }
     @test '_getUserRoles function with no roles'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-            .getReadQuery(user, (err, query) => {
+        const req: any = { user }
+        new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+            .getReadQuery(req, (err, query) => {
                 if (err) return done(err)
                 if (query) return done(query)
                 done()
@@ -133,11 +140,12 @@ class PermissionClassTest {
     }
     @test '_getUserRoles function with 1 roles'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-                .getReadQuery(user, (err, query) => {
+            new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+                .getReadQuery(req, (err, query) => {
                     if (err) return done(err)
                     if (query) return done(query)
                     done()
@@ -146,13 +154,14 @@ class PermissionClassTest {
     }
     @test '_getUserRoles function with +1 roles'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.READ }] }).save((err, role2) => {
                 if (err) return done(err)
                 user.roles = [role._id, role2._id]
-                new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-                    .getReadQuery(user, (err, query) => {
+                new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+                    .getReadQuery(req, (err, query) => {
                         if (err) return done(err)
                         if (query) return done(query)
                         done()
@@ -162,13 +171,14 @@ class PermissionClassTest {
     }
     @test '_getUserRoles function with +1 roles descendant'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role2) => {
                 if (err) return done(err)
                 user.roles = [role._id, role2._id]
-                new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-                    .getReadQuery(user, (err, query) => {
+                new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+                    .getReadQuery(req, (err, query) => {
                         if (err) return done(err)
                         if (query) return done(query)
                         done()
@@ -178,9 +188,10 @@ class PermissionClassTest {
     }
     @test '_getMaxPermissionByDoc function with no permission'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const obj = new PermissionClassTest.model({})
-        new PermissionClass(PermissionClassTest.model, null, null, { getQuery: (a, cb) => cb(null, null) })
-            .hasReadPermission(user, obj, (err, hasReadPermission) => {
+        new PermissionClass(PermissionClassTest.model, null, null, { getFilterByPermissions: (a, cb) => cb(null, null) })
+            .hasReadPermission(req, obj, (err, hasReadPermission) => {
                 if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed.')
@@ -188,9 +199,10 @@ class PermissionClassTest {
     }
     @test '_getMaxPermissionByDoc function with 0 docs'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const obj = new PermissionClassTest.model({})
-        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-            .hasReadPermission(user, obj, (err, hasReadPermission) => {
+        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+            .hasReadPermission(req, obj, (err, hasReadPermission) => {
                 if (err) return done(err)
                 if (hasReadPermission) return done('test failed')
                 done()
@@ -198,11 +210,12 @@ class PermissionClassTest {
     }
     @test '_getMaxPermissionByDoc function with some docs'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const obj = new PermissionClassTest.model({})
         new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object: obj, permission: PermissionEnum.READ }).save((err, doc2) => {
             if (err) return done(err)
-            new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-                .hasReadPermission(user, obj, (err, hasReadPermission) => {
+            new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+                .hasReadPermission(req, obj, (err, hasReadPermission) => {
                     if (err) return done(err)
                     if (hasReadPermission) return done()
                     return done('test failed')
@@ -212,34 +225,37 @@ class PermissionClassTest {
     @test 'getReadQuery function handle error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const roleModel: any = {
             find: (filter, cb) => {
                 cb(new Error('some error'))
             }
         }
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, roleModel, {})
-        perm.getReadQuery(user, (err, query) => {
+        perm.getReadQuery(req, (err, query) => {
             err.message.should.be.eql('some error')
             done()
         })
     }
     @test 'getReadQuery with a role > READ'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            new PermissionClass(PermissionClassTest.model, null, null, { getQuery: (a, cb) => cb(null, null) })
-                .getReadQuery(user, (err, query) => {
+            new PermissionClass(PermissionClassTest.model, null, null, { getFilterByPermissions: (a, cb) => cb(null, null) })
+                .getReadQuery(req, (err, query) => {
                     if (err) return done(err)
                     if (query) return done(query)
                     done()
                 })
         })
     }
-    @test 'getReadQuery handle getQuery error'(done) {
+    @test 'getReadQuery handle getFilterByPermissionserror'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery: (a, cb) => cb(new Error('some error'), null) })
-            .getReadQuery(user, (err, query) => {
+        const req: any = { user }
+        new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(new Error('some error'), null) })
+            .getReadQuery(req, (err, query) => {
                 err.message.should.be.equal('some error')
                 if (query) return done('test failed')
                 done()
@@ -247,7 +263,7 @@ class PermissionClassTest {
     }
     @test 'getReadQuery handle _getReadObjects error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
         const permissionModel: any = {
@@ -255,34 +271,38 @@ class PermissionClassTest {
                 cb(new Error('some error'))
             }
         }
-        const perm = new PermissionClass(PermissionClassTest.model, permissionModel, PermissionClassTest.role, { getQuery })
-        perm.getReadQuery(user, (err, query) => {
+        const perm = new PermissionClass(PermissionClassTest.model, permissionModel, PermissionClassTest.role, { getFilterByPermissions })
+        const req: any = { user }
+        perm.getReadQuery(req, (err, query) => {
             err.message.should.be.eql('some error')
             done()
         })
     }
     @test 'getReadQuery with no permission'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        new PermissionClass(PermissionClassTest.model, null, null, { getQuery: (a, cb) => cb(null, 'the query') })
-            .getReadQuery(user, (err, query) => {
+        const req: any = { user }
+        new PermissionClass(PermissionClassTest.model, null, null, { getFilterByPermissions: (a, cb) => cb(null, { r: 'the query' }) })
+            .getReadQuery(req, (err, query) => {
                 if (err) return done(err)
-                query.should.be.eql('the query')
+                query.r.should.be.eql('the query')
                 done()
             })
     }
     @test 'getReadQuery with 0 permission objects'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, 'the query') })
-            .getReadQuery(user, (err, query) => {
+        const req: any = { user }
+        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, {r:'the query'}) })
+            .getReadQuery(req, (err, query) => {
                 if (err) return done(err)
-                query.should.be.eql('the query')
+                query.r.should.be.eql('the query')
                 done()
             })
     }
     @test 'getReadQuery with 0 permission objects and no query'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-            .getReadQuery(user, (err, query) => {
+        const req: any = { user }
+        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+            .getReadQuery(req, (err, query) => {
                 if (err) return done(err)
                 query.should.be.eql({ _id: { $exists: false } })
                 done()
@@ -290,7 +310,8 @@ class PermissionClassTest {
     }
     @test 'getReadQuery with +1 ermission objects and no query'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const req: any = { user }
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
@@ -299,8 +320,8 @@ class PermissionClassTest {
             if (err) return done(err)
             new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object: object2, permission: PermissionEnum.READ }).save((err, doc2) => {
                 if (err) return done(err)
-                const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery })
-                perm.getReadQuery(user, (err, query) => {
+                const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions })
+                perm.getReadQuery(req, (err, query) => {
                     if (err) return done(err)
                     query.should.be.eql({ _id: { $in: [doc.object, doc2.object] } })
                     done()
@@ -310,7 +331,8 @@ class PermissionClassTest {
     }
     @test 'getReadQuery with +1 ermission objects and with query'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const req: any = { user }
+        const getFilterByPermissions = (user, cb) => {
             cb(null, 'the query')
         }
         const object = new PermissionClassTest.model({ string: 'string' })
@@ -319,8 +341,8 @@ class PermissionClassTest {
             if (err) return done(err)
             new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object: object2, permission: PermissionEnum.READ }).save((err, doc2) => {
                 if (err) return done(err)
-                const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery })
-                perm.getReadQuery(user, (err, query) => {
+                const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions })
+                perm.getReadQuery(req, (err, query) => {
                     if (err) return done(err)
                     query.should.be.eql({ $and: ['the query', { _id: { $in: [doc.object, doc2.object] } }] })
                     done()
@@ -330,12 +352,13 @@ class PermissionClassTest {
     }
     @test '_hasReadPermissionByOptions handle error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const req: any = { user }
+        const getFilterByPermissions = (user, cb) => {
             cb(new Error('some error'))
         }
         const object = new PermissionClassTest.model({ string: 'string' })
-        const perm = new PermissionClass(PermissionClassTest.model, null, null, { getQuery })
-        perm.hasReadPermission(user, object, (err, hasReadPermission) => {
+        const perm = new PermissionClass(PermissionClassTest.model, null, null, { getFilterByPermissions })
+        perm.hasReadPermission(req, object, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -343,12 +366,13 @@ class PermissionClassTest {
     }
     @test '_hasReadPermissionByOptions no query no role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const req: any = { user }
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
-        const perm = new PermissionClass(PermissionClassTest.model, null, null, { getQuery })
-        perm.hasReadPermission(user, object, (err, hasReadPermission) => {
+        const perm = new PermissionClass(PermissionClassTest.model, null, null, { getFilterByPermissions })
+        perm.hasReadPermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -356,12 +380,13 @@ class PermissionClassTest {
     }
     @test '_hasReadPermissionByOptions no query with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const req: any = { user }
+        const getFilterByPermissions = (user, cb) => {
             cb(null, null)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
-        const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery })
-        perm.hasReadPermission(user, object, (err, hasReadPermission) => {
+        const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions })
+        perm.hasReadPermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -369,15 +394,16 @@ class PermissionClassTest {
     }
     @test '_hasReadPermissionByOptions handle query error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const getFilterByPermissions = (user, cb) => {
             cb(null, 'some query')
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const model: any = {
             findOne: (filter, cb) => cb(new Error('some error'))
         }
-        const perm = new PermissionClass(model, null, PermissionClassTest.role, { getQuery })
-        perm.hasReadPermission(user, object, (err, hasReadPermission) => {
+        const req: any = { user }
+        const perm = new PermissionClass(model, null, PermissionClassTest.role, { getFilterByPermissions })
+        perm.hasReadPermission(req, object, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -385,12 +411,13 @@ class PermissionClassTest {
     }
     @test '_hasReadPermissionByOptions with query and no doc'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const req: any = { user }
+        const getFilterByPermissions = (user, cb) => {
             cb(null, { _id: { $exists: true } })
         }
         const object = new PermissionClassTest.model({ string: 'string' })
-        const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery })
-        perm.hasReadPermission(user, object, (err, hasReadPermission) => {
+        const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions })
+        perm.hasReadPermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -398,14 +425,15 @@ class PermissionClassTest {
     }
     @test '_hasReadPermissionByOptions with query and doc'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
-        const getQuery = (user, cb) => {
+        const req: any = { user }
+        const getFilterByPermissions = (user, cb) => {
             cb(null, { _id: { $exists: true } })
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         object.save((err) => {
             if (err) return done(err)
-            const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getQuery })
-            perm.hasReadPermission(user, object, (err, hasReadPermission) => {
+            const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions })
+            perm.hasReadPermission(req, object, (err, hasReadPermission) => {
                 if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
@@ -415,6 +443,7 @@ class PermissionClassTest {
     @test 'hasReadPermission handle role error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const roleModel: any = {
             find: (filter, cb) => {
                 cb(new Error('some error'))
@@ -422,7 +451,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, roleModel, {})
-        perm.hasReadPermission(user, doc, (err, hasReadPermission) => {
+        perm.hasReadPermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -431,6 +460,7 @@ class PermissionClassTest {
     @test 'hasReadPermission handle getMaxPermissionsError error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const permissionModel: any = {
             findOne: (filter, cb) => {
                 cb(new Error('some error'))
@@ -438,7 +468,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, permissionModel, null, {})
-        perm.hasReadPermission(user, doc, (err, hasReadPermission) => {
+        perm.hasReadPermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -446,12 +476,13 @@ class PermissionClassTest {
     }
     @test 'hasReadPermission with 1 role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasReadPermission(user, doc, (err, hasReadPermission) => {
+            perm.hasReadPermission(req, doc, (err, hasReadPermission) => {
                 if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
@@ -460,13 +491,14 @@ class PermissionClassTest {
     }
     @test 'hasReadPermission with 1 permission'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         doc.save((err, doc) => {
             if (err) return done(err)
             new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user: user._id, object: doc._id, permission: PermissionEnum.READ }).save((err) => {
                 if (err) return done(err)
-                perm.hasReadPermission(user, doc, (err, hasReadPermission) => {
+                perm.hasReadPermission(req, doc, (err, hasReadPermission) => {
                     if (err) return done(err)
                     if (hasReadPermission) return done()
                     done('test failed')
@@ -476,9 +508,10 @@ class PermissionClassTest {
     }
     @test 'hasReadPermission with 0 permission'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
-        const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getQuery: (a, cb) => cb(null, null) })
-        perm.hasReadPermission(user, doc, (err, hasReadPermission) => {
+        const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
+        perm.hasReadPermission(req, doc, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -486,12 +519,13 @@ class PermissionClassTest {
     }
     @test '_hasAddPermissionByOptions handle error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasAddPermission = (user, cb) => {
             cb(new Error('some error'))
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasAddPermission })
-        perm.hasAddPermission(user, (err, hasReadPermission) => {
+        perm.hasAddPermission(req, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -499,12 +533,13 @@ class PermissionClassTest {
     }
     @test '_hasAddPermissionByOptions response'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasAddPermission = (user, cb) => {
             cb(null, true)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasAddPermission })
-        perm.hasAddPermission(user, (err, hasReadPermission) => {
+        perm.hasAddPermission(req, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -512,9 +547,10 @@ class PermissionClassTest {
     }
     @test '_hasAddPermissionByOptions without option and role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, {})
-        perm.hasAddPermission(user, (err, hasReadPermission) => {
+        perm.hasAddPermission(req, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -522,9 +558,10 @@ class PermissionClassTest {
     }
     @test '_hasAddPermissionByOptions without option and with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, {})
-        perm.hasAddPermission(user, (err, hasReadPermission) => {
+        perm.hasAddPermission(req, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -533,6 +570,7 @@ class PermissionClassTest {
     @test 'hasAddPermission handle role error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const roleModel: any = {
             find: (filter, cb) => {
                 cb(new Error('some error'))
@@ -540,7 +578,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, roleModel, {})
-        perm.hasAddPermission(user, (err, hasReadPermission) => {
+        perm.hasAddPermission(req, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -548,12 +586,13 @@ class PermissionClassTest {
     }
     @test 'hasAddPermission with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADD }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasAddPermission(user, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasAddPermission(req, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
             })
@@ -561,12 +600,13 @@ class PermissionClassTest {
     }
     @test 'hasAddPermission without role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasAddPermission(user, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasAddPermission(req, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done('test failed')
                 done()
             })
@@ -574,12 +614,13 @@ class PermissionClassTest {
     }
     @test '_hasUpdatePermissionByOptions handle error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasUpdatePermission = (user, doc, cb) => {
             cb(new Error('some error'))
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasUpdatePermission })
-        perm.hasUpdatePermission(user, object, (err, hasReadPermission) => {
+        perm.hasUpdatePermission(req, object, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -587,12 +628,13 @@ class PermissionClassTest {
     }
     @test '_hasUpdatePermissionByOptions response'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasUpdatePermission = (user, doc, cb) => {
             cb(null, true)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasUpdatePermission })
-        perm.hasUpdatePermission(user, object, (err, hasReadPermission) => {
+        perm.hasUpdatePermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -600,9 +642,10 @@ class PermissionClassTest {
     }
     @test '_hasUpdatePermissionByOptions without option and role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, {})
-        perm.hasUpdatePermission(user, object, (err, hasReadPermission) => {
+        perm.hasUpdatePermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -610,9 +653,10 @@ class PermissionClassTest {
     }
     @test '_hasUpdatePermissionByOptions without option and with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, {})
-        perm.hasUpdatePermission(user, object, (err, hasReadPermission) => {
+        perm.hasUpdatePermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -621,6 +665,7 @@ class PermissionClassTest {
     @test 'hasUpdatePermission handle role error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const roleModel: any = {
             find: (filter, cb) => {
                 cb(new Error('some error'))
@@ -628,7 +673,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, roleModel, {})
-        perm.hasUpdatePermission(user, doc, (err, hasReadPermission) => {
+        perm.hasUpdatePermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -637,6 +682,7 @@ class PermissionClassTest {
     @test 'hasUpdatePermission handle getMaxPermissionsError error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const permissionModel: any = {
             findOne: (filter, cb) => {
                 cb(new Error('some error'))
@@ -644,7 +690,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, permissionModel, null, {})
-        perm.hasUpdatePermission(user, doc, (err, hasReadPermission) => {
+        perm.hasUpdatePermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -652,12 +698,13 @@ class PermissionClassTest {
     }
     @test 'hasUpdatePermission with permission'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object: doc, permission: PermissionEnum.ADMIN }).save((err) => {
             if (err) return done(err)
-            perm.hasUpdatePermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasUpdatePermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
             })
@@ -665,13 +712,14 @@ class PermissionClassTest {
     }
     @test 'hasUpdatePermission with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasUpdatePermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasUpdatePermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
             })
@@ -679,13 +727,14 @@ class PermissionClassTest {
     }
     @test 'hasUpdatePermission without role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasUpdatePermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasUpdatePermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done('test failed')
                 done()
             })
@@ -693,12 +742,13 @@ class PermissionClassTest {
     }
     @test '_hasDeletePermissionByOptions handle error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasDeletePermission = (user, doc, cb) => {
             cb(new Error('some error'))
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasDeletePermission })
-        perm.hasDeletePermission(user, object, (err, hasReadPermission) => {
+        perm.hasDeletePermission(req, object, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -706,12 +756,13 @@ class PermissionClassTest {
     }
     @test '_hasDeletePermissionByOptions response'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasDeletePermission = (user, doc, cb) => {
             cb(null, true)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasDeletePermission })
-        perm.hasDeletePermission(user, object, (err, hasReadPermission) => {
+        perm.hasDeletePermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -719,9 +770,10 @@ class PermissionClassTest {
     }
     @test '_hasDeletePermissionByOptions without option and role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, {})
-        perm.hasDeletePermission(user, object, (err, hasReadPermission) => {
+        perm.hasDeletePermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -729,9 +781,10 @@ class PermissionClassTest {
     }
     @test '_hasDeletePermissionByOptions without option and with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, {})
-        perm.hasDeletePermission(user, object, (err, hasReadPermission) => {
+        perm.hasDeletePermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -740,6 +793,7 @@ class PermissionClassTest {
     @test 'hasDeletePermission handle role error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const roleModel: any = {
             find: (filter, cb) => {
                 cb(new Error('some error'))
@@ -747,7 +801,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, roleModel, {})
-        perm.hasDeletePermission(user, doc, (err, hasReadPermission) => {
+        perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -756,6 +810,7 @@ class PermissionClassTest {
     @test 'hasDeletePermission handle getMaxPermissionsError error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const permissionModel: any = {
             findOne: (filter, cb) => {
                 cb(new Error('some error'))
@@ -763,7 +818,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, permissionModel, null, {})
-        perm.hasDeletePermission(user, doc, (err, hasReadPermission) => {
+        perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -771,12 +826,13 @@ class PermissionClassTest {
     }
     @test 'hasDeletePermission with permission'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object: doc, permission: PermissionEnum.ADMIN }).save((err) => {
             if (err) return done(err)
-            perm.hasDeletePermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
             })
@@ -784,13 +840,14 @@ class PermissionClassTest {
     }
     @test 'hasDeletePermission with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasDeletePermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
             })
@@ -798,13 +855,14 @@ class PermissionClassTest {
     }
     @test 'hasDeletePermission without role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasDeletePermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done('test failed')
                 done()
             })
@@ -812,12 +870,13 @@ class PermissionClassTest {
     }
     @test '_hasAdminPermissionByOptions handle error'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasAdminPermission = (user, doc, cb) => {
             cb(new Error('some error'))
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasAdminPermission })
-        perm.hasAdminPermission(user, object, (err, hasReadPermission) => {
+        perm.hasAdminPermission(req, object, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -825,12 +884,13 @@ class PermissionClassTest {
     }
     @test '_hasAdminPermissionByOptions response'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const hasAdminPermission = (user, doc, cb) => {
             cb(null, true)
         }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, { hasAdminPermission })
-        perm.hasAdminPermission(user, object, (err, hasReadPermission) => {
+        perm.hasAdminPermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done()
             done('test failed')
@@ -838,9 +898,10 @@ class PermissionClassTest {
     }
     @test '_hasAdminPermissionByOptions without option and role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, null, {})
-        perm.hasAdminPermission(user, object, (err, hasReadPermission) => {
+        perm.hasAdminPermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -848,9 +909,10 @@ class PermissionClassTest {
     }
     @test '_hasAdminPermissionByOptions without option and with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const object = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, {})
-        perm.hasAdminPermission(user, object, (err, hasReadPermission) => {
+        perm.hasAdminPermission(req, object, (err, hasReadPermission) => {
             if (err) return done(err)
             if (hasReadPermission) return done('test failed')
             done()
@@ -865,8 +927,9 @@ class PermissionClassTest {
             }
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
+        const req: any = { user }
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, roleModel, {})
-        perm.hasAdminPermission(user, doc, (err, hasReadPermission) => {
+        perm.hasAdminPermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -875,6 +938,7 @@ class PermissionClassTest {
     @test 'hasAdminPermission handle getMaxPermissionsError error'(done) {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
+        const req: any = { user }
         const permissionModel: any = {
             findOne: (filter, cb) => {
                 cb(new Error('some error'))
@@ -882,7 +946,7 @@ class PermissionClassTest {
         }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, permissionModel, null, {})
-        perm.hasAdminPermission(user, doc, (err, hasReadPermission) => {
+        perm.hasAdminPermission(req, doc, (err, hasReadPermission) => {
             err.message.should.be.eql('some error')
             if (hasReadPermission) return done('test failed')
             done()
@@ -891,11 +955,12 @@ class PermissionClassTest {
     @test 'hasAdminPermission with permission'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
         const doc = new PermissionClassTest.model({ string: 'string' })
+        const req: any = { user }
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.permission({ table: PermissionClassTest.model.modelName, user, object: doc, permission: PermissionEnum.ADMIN }).save((err) => {
             if (err) return done(err)
-            perm.hasAdminPermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasAdminPermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
             })
@@ -903,13 +968,14 @@ class PermissionClassTest {
     }
     @test 'hasAdminPermission with role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasAdminPermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasAdminPermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done()
                 done('test failed')
             })
@@ -917,13 +983,14 @@ class PermissionClassTest {
     }
     @test 'hasAdminPermission without role'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
         new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
-            perm.hasAdminPermission(user, doc, (err, hasReadPermission) => {
-                if(err) return done(err)
+            perm.hasAdminPermission(req, doc, (err, hasReadPermission) => {
+                if (err) return done(err)
                 if (hasReadPermission) return done('test failed')
                 done()
             })

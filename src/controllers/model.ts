@@ -10,14 +10,14 @@ type RichEmitter = EventEmitter & PermissionChecks
 type returnFunction = { infoModel: InfoModel, emitter: RichEmitter }
 
 export default function <T extends Document>(router: Router, route: string, model: Model<T>,
-    models: any, permissionModel: Model<IPermission>, roleModel: Model<IRole>, userOptions?: ServeOptions): returnFunction {
-    const path = new RestApiPath<T>(router, route, model, userOptions)
+    models: any, permissionModel: Model<IPermission>, roleModel: Model<IRole>, userOptions: ServeOptions, isMongo4: boolean): returnFunction {
+    const path = new RestApiPath<T>(router, route, model, userOptions, isMongo4)
     const permissions = path.setEndPoints(models, permissionModel, roleModel)
     const emitter: EventEmitter & Partial<PermissionChecks> = path.emitter
     emitter.hasAddPermission = permissions.hasAddPermission.bind(permissions)
     emitter.hasUpdatePermission = permissions.hasUpdatePermission.bind(permissions)
     emitter.hasDeletePermission = permissions.hasDeletePermission.bind(permissions)
     emitter.hasAdminPermission = permissions.hasAdminPermission.bind(permissions)
-    emitter.getQuery = permissions.getReadQuery.bind(permissions)
+    emitter.getFilterByPermissions = permissions.getReadQuery.bind(permissions)
     return { infoModel: path.infoModel, emitter: <RichEmitter>emitter }
 }

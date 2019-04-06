@@ -14,7 +14,7 @@ export type CtxType = {
 }
 
 
-export default (models: { [key: string]: InfoModel }, model: Model<any>,
+export default (isMongo4: boolean, models: { [key: string]: InfoModel }, model: Model<any>,
     ctx: CtxType, query: any, prevQuery: any, callback: (err: Error, docs?: any[]) => void) => {
     callback(new Error('some error'))
 }

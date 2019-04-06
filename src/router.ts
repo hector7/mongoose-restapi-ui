@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { Model, Schema, Document } from 'mongoose'
-import { RequestHandler } from 'express'
+import { RequestHandler, RouterOptions } from 'express'
 
 import { ServeOptions, PERMISSION_MODEL, ROLE_MODEL, PermissionChecks } from './definitions/model'
 import permissionSchema, { IPermission } from './models/permissionSchema'
@@ -19,12 +19,15 @@ type ApiRouter = Router & {
     setConnection?: (connection: Connection) => void
 }
 
-function ApiRouter(...args): ApiRouter {
+function ApiRouter(): ApiRouter
+function ApiRouter(options: { isMongo4?: boolean } & RouterOptions): ApiRouter
+function ApiRouter(options = { isMongo4: false }): ApiRouter {
+    const { isMongo4, ...routerOptions } = options
     let models = {}
-    const router: ApiRouter = Router(...args)
+    const router: ApiRouter = Router(routerOptions)
     let permissionModel: Model<IPermission> = null
     let roleModel: Model<IRole> = null
-    let globalRoute = ''
+    let globalRoute = '/'
     router.roleModel = () => roleModel
     router.setGlobalRoute = (path: string) => {
         globalRoute = path
@@ -34,7 +37,7 @@ function ApiRouter(...args): ApiRouter {
         roleModel = connection.model<IRole>(ROLE_MODEL, roleSchema)
     }
     router.setModel = <T extends Document>(route, model, serveOptions) => {
-        const { infoModel, emitter } = serveApi<T>(router, route, model, models, permissionModel, roleModel, serveOptions)
+        const { infoModel, emitter } = serveApi<T>(router, route, model, models, permissionModel, roleModel, serveOptions, isMongo4)
         infoModel.route = `${globalRoute}${route}`
         models[infoModel.name] = infoModel
         return emitter

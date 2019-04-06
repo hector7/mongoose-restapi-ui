@@ -2,7 +2,8 @@ import { Model, Types, Document } from "mongoose";
 import { IPermission } from "./permissionSchema";
 import { IRole } from "./roleSchema";
 import { IUser } from "./userSchema";
-import { ServeOptions, PermissionEnum, HasPermissionCallback } from "../definitions/model";
+import { ServeOptions, PermissionEnum, HasPermissionCallback, UserRequest } from "../definitions/model";
+import { Request } from "express";
 
 export default class PermissionClass {
     private table: string
@@ -50,6 +51,14 @@ export default class PermissionClass {
         }
     }
 
+    public checkUser(user: IUser): boolean {
+        if (this.permission) {
+            if (user && user._id) return true
+            return false
+        }
+        return true
+    }
+
     private _getMaxPermissionByDoc(user: IUser, doc: Document, callback: (err: Error, perm?: PermissionEnum) => void) {
         if (this.permission) {
             return this.permission.findOne({ table: this.model.modelName, user: user._id, object: doc._id }, (err, permObj) => {
@@ -65,13 +74,13 @@ export default class PermissionClass {
         }
     }
 
-    public getReadQuery(user: IUser, callback: (error: Error, query?: any) => void) {
-        this._getUserRoles(user, (err, role) => {
+    public getReadQuery(req: UserRequest, callback: (error: Error, query?: any) => void) {
+        this._getUserRoles(req.user, (err, role) => {
             if (err) return callback(err)
             if (role >= PermissionEnum.READ) return callback(null, null)
-            this.options.getQuery(user, (err, query) => {
+            this.options.getFilterByPermissions(req, (err, query) => {
                 if (err) return callback(err)
-                this._getReadObjects(user, (err, ids) => {
+                this._getReadObjects(req.user, (err, ids) => {
                     if (err) return callback(err)
                     if (ids) {
                         if (ids.length === 0 && !query) return callback(null, { _id: { $exists: false } })
@@ -84,11 +93,11 @@ export default class PermissionClass {
             })
         })
     }
-    private _hasReadPermissionByOptions(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        this.options.getQuery(user, (err, query) => {
-            if (err) return callback(err)
+    private _hasReadPermissionByOptions(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
+        this.options.getFilterByPermissions(req, (err, query) => {
+            if (err) return callback(err, undefined)
             if (query) return this.model.findOne({ $and: [{ _id: doc._id }, query] }, (err, doc) => {
-                if (err) return callback(err)
+                if (err) return callback(err, undefined)
                 if (doc) return callback(null, true)
                 callback(null, false)
             })
@@ -96,78 +105,78 @@ export default class PermissionClass {
         })
     }
 
-    public hasReadPermission(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        this._getUserRoles(user, (err, role) => {
-            if (err) return callback(err)
+    public hasReadPermission(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
+        this._getUserRoles(req.user, (err, role) => {
+            if (err) return callback(err, undefined)
             if (role >= PermissionEnum.READ) return callback(null, true)
-            this._getMaxPermissionByDoc(user, doc, (err, permission) => {
-                if (err) return callback(err)
+            this._getMaxPermissionByDoc(req.user, doc, (err, permission) => {
+                if (err) return callback(err, undefined)
                 if (permission >= PermissionEnum.READ) return callback(null, true)
-                this._hasReadPermissionByOptions(user, doc, callback)
+                this._hasReadPermissionByOptions(req, doc, callback)
             })
         })
     }
 
-    private _hasAddPermissionByOptions(user: IUser, callback: HasPermissionCallback) {
-        if (this.options.hasAddPermission) return this.options.hasAddPermission(user, callback)
+    private _hasAddPermissionByOptions(req: Request, callback: HasPermissionCallback) {
+        if (this.options.hasAddPermission) return this.options.hasAddPermission(req, callback)
         callback(null, this.role ? false : true)
     }
 
-    public hasAddPermission(user: IUser, callback: HasPermissionCallback) {
-        this._getUserRoles(user, (err, role) => {
-            if (err) return callback(err)
+    public hasAddPermission(req: UserRequest, callback: HasPermissionCallback) {
+        this._getUserRoles(req.user, (err, role) => {
+            if (err) return callback(err, undefined)
             if (role >= PermissionEnum.ADD) return callback(null, true)
-            this._hasAddPermissionByOptions(user, callback)
+            this._hasAddPermissionByOptions(req, callback)
         })
     }
 
-    private _hasUpdatePermissionByOptions(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        if (this.options.hasUpdatePermission) return this.options.hasUpdatePermission(user, doc, callback)
+    private _hasUpdatePermissionByOptions(req: Request, doc: Document, callback: HasPermissionCallback) {
+        if (this.options.hasUpdatePermission) return this.options.hasUpdatePermission(req, doc, callback)
         callback(null, this.role ? false : true)
     }
 
-    public hasUpdatePermission(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        this._getUserRoles(user, (err, role) => {
-            if (err) return callback(err)
+    public hasUpdatePermission(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
+        this._getUserRoles(req.user, (err, role) => {
+            if (err) return callback(err, undefined)
             if (role >= PermissionEnum.UPDATE) return callback(null, true)
-            this._getMaxPermissionByDoc(user, doc, (err, permission) => {
-                if (err) return callback(err)
+            this._getMaxPermissionByDoc(req.user, doc, (err, permission) => {
+                if (err) return callback(err, undefined)
                 if (permission >= PermissionEnum.UPDATE) return callback(null, true)
-                this._hasUpdatePermissionByOptions(user, doc, callback)
+                this._hasUpdatePermissionByOptions(req, doc, callback)
             })
         })
     }
 
-    private _hasDeletePermissionByOptions(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        if (this.options.hasDeletePermission) return this.options.hasDeletePermission(user, doc, callback)
+    private _hasDeletePermissionByOptions(req: Request, doc: Document, callback: HasPermissionCallback) {
+        if (this.options.hasDeletePermission) return this.options.hasDeletePermission(req, doc, callback)
         callback(null, this.role ? false : true)
     }
 
-    public hasDeletePermission(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        this._getUserRoles(user, (err, role) => {
-            if (err) return callback(err)
+    public hasDeletePermission(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
+        this._getUserRoles(req.user, (err, role) => {
+            if (err) return callback(err, undefined)
             if (role >= PermissionEnum.DELETE) return callback(null, true)
-            this._getMaxPermissionByDoc(user, doc, (err, permission) => {
-                if (err) return callback(err)
+            this._getMaxPermissionByDoc(req.user, doc, (err, permission) => {
+                if (err) return callback(err, undefined)
                 if (permission >= PermissionEnum.DELETE) return callback(null, true)
-                this._hasDeletePermissionByOptions(user, doc, callback)
+                this._hasDeletePermissionByOptions(req, doc, callback)
             })
         })
     }
 
-    private _hasAdminPermissionByOptions(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        if (this.options.hasAdminPermission) return this.options.hasAdminPermission(user, doc, callback)
+    private _hasAdminPermissionByOptions(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
+        if (this.options.hasAdminPermission) return this.options.hasAdminPermission(req, doc, callback)
         callback(null, false)
     }
 
-    public hasAdminPermission(user: IUser, doc: Document, callback: HasPermissionCallback) {
-        this._getUserRoles(user, (err, role) => {
-            if (err) return callback(err)
+    public hasAdminPermission(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
+        this._getUserRoles(req.user, (err, role) => {
+            if (err) return callback(err, undefined)
             if (role >= PermissionEnum.ADMIN) return callback(null, true)
-            this._getMaxPermissionByDoc(user, doc, (err, permission) => {
-                if (err) return callback(err)
+            this._getMaxPermissionByDoc(req.user, doc, (err, permission) => {
+                if (err) return callback(err, undefined)
                 if (permission >= PermissionEnum.ADMIN) return callback(null, true)
-                this._hasAdminPermissionByOptions(user, doc, callback)
+                this._hasAdminPermissionByOptions(req, doc, callback)
             })
         })
     }

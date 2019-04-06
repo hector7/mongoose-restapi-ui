@@ -15,10 +15,9 @@ export type CtxType = {
 
 
 export default (isMongo4: boolean, models: { [key: string]: InfoModel }, model: Model<any>,
-    ctx: CtxType, query: any, prevQuery: any, callback: (err: Error, query?: any) => void) => {
-    const find = callback => callback(new Error('some error'))
-    const limit = c => ({ find })
-    const skip = c => ({ limit })
-    const count = c => c(null, 1)
-    callback(null, { count, skip })
+    ctx: CtxType, query: any, prevQuery: any, callback: (err: Error, docs?: any[]) => void) => {
+    const res: any = {
+        count: cb => cb('some error')
+    }
+    callback(null, res)
 }

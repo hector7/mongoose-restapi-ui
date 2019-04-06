@@ -31,7 +31,14 @@ const provider = mongoose.model('Provider', new mongoose.Schema({
     }],
     comment: { type: String }
 }))
-
+const user = mongoose.model('User', new mongoose.Schema({
+    name: String
+}))
+const userId = new user()
+app.use((req, res, next)=>{
+    req.user = userId
+    next()
+})
 router.setGlobalRoute('')
 router.setConnection(mongoose)
 router.setModel('/customer', customer, { name: 'name' })

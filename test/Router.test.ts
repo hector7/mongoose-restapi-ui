@@ -20,7 +20,8 @@ const PROVIDER = 'Provider'
 class RouterTest {
     public static customerRef
     public static connection: Connection
-    public static server: Server
+    public static server: any
+    public static server2: any
     public static customer: Model<any>
     public static provider: Model<any>
 
@@ -59,12 +60,20 @@ class RouterTest {
         router.setModel(`/${CUSTOMER}`, RouterTest.customer, { hasAdminPermission: hasPerm, hasEditPermission: hasPerm, hasAddPermission: hasAddPerm, name: 'name' })
         app.use('/', router)
         app.get('/tree', router.publishUiTree())
-        RouterTest.server = app.listen(3001, (error: Error) => {
-            let chaiHttp = require('chai-http');
-            chai.use(chaiHttp)
-            chai.should();
-            done(error)
-        })
+        RouterTest.server = app
+        let chaiHttp = require('chai-http');
+        chai.use(chaiHttp)
+        chai.should();
+
+        const app2 = express()
+        const router2 = ApiRouter({ isMongo4: true })
+        router2.setGlobalRoute('/mongo4')
+        router2.setModel(`/${PROVIDER}`, RouterTest.provider)
+        router2.setModel(`/${CUSTOMER}`, RouterTest.customer, { name: 'name' })
+        app2.use('/', router2)
+        app2.get('/tree', router2.publishUiTree())
+        RouterTest.server2 = app2
+        done()
     }
     public static after(done) {
         RouterTest.customer.remove((error) => {
@@ -252,8 +261,8 @@ class RouterTest {
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
-                res.body.should.be.a('object');
-                Object.keys(res.body).length.should.be.eql(2)
+                res.body.should.be.a('array');
+                res.body.length.should.be.eql(2)
                 done();
             });
     }
@@ -262,7 +271,7 @@ class RouterTest {
 class RouterTestPermissions {
     public static customerRef
     public static connection: Connection
-    public static server: Server
+    public static server: any
     public static customer: Model<any>
     public static provider: Model<any>
     public static emm: EventEmitter & PermissionChecks
@@ -295,7 +304,7 @@ class RouterTestPermissions {
         RouterTestPermissions.user = new User()
         var adminId = null
         router.use((req: UserRequest, res, next) => {
-            req.user =  RouterTestPermissions.user
+            req.user = RouterTestPermissions.user
             req.user.roles = [adminId]
             next()
         })
@@ -317,12 +326,11 @@ class RouterTestPermissions {
         }).save((err, doc) => {
             if (err) return done(err)
             adminId = doc._id
-            RouterTestPermissions.server = app.listen(3001, (error: Error) => {
-                let chaiHttp = require('chai-http');
-                chai.use(chaiHttp)
-                chai.should();
-                done(error)
-            })
+            let chaiHttp = require('chai-http');
+            chai.use(chaiHttp)
+            chai.should();
+            RouterTestPermissions.server = app
+            done()
         })
     }
     public static after(done) {
@@ -367,30 +375,26 @@ class RouterTestPermissions {
                 done()
             })
     }
-
     @test("should create a customer object")
     public postCustomer(done) {
         let customer = {
             name: 'Hector'
         }
-        
-        RouterTestPermissions.emm.hasAddPermission(RouterTestPermissions.user, (err, hasAddPermission)=>{
-            if(err) return done(err)
-            hasAddPermission.should.be.eql(true)
-            chai.request(RouterTestPermissions.server)
-                .post(`/${CUSTOMER}`)
-                .send(customer)
-                .end((err, res) => {
-                    if (err) return done(err)
-                    res.should.have.status(201);
-                    res.body.should.be.a('object');
-                    res.body.should.have.property('_id');
-                    res.body.should.have.property('name').eql('Hector');
-                    RouterTestPermissions.customerRef = res.body
-                    done();
-                });
-        })
+
+        chai.request(RouterTestPermissions.server)
+            .post(`/${CUSTOMER}`)
+            .send(customer)
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(201);
+                res.body.should.be.a('object');
+                res.body.should.have.property('_id');
+                res.body.should.have.property('name').eql('Hector');
+                RouterTestPermissions.customerRef = res.body
+                done();
+            });
     }
+
     @test("find by id - should get get the created customer object")
     public getIdCustomer(done) {
         chai.request(RouterTestPermissions.server)
@@ -516,8 +520,8 @@ class RouterTestPermissions {
             .end((err, res) => {
                 if (err) return done(err)
                 res.should.have.status(200);
-                res.body.should.be.a('object');
-                Object.keys(res.body).length.should.be.eql(2)
+                res.body.should.be.a('array');
+                res.body.length.should.be.eql(2)
                 done();
             });
     }
@@ -526,7 +530,7 @@ class RouterTestPermissions {
 class RouterTestPermissionsEndPoints {
     public static customerRef
     public static connection: Connection
-    public static server: Server
+    public static server: any
     public static customer: Model<any>
     public static provider: Model<any>
 
@@ -582,12 +586,11 @@ class RouterTestPermissionsEndPoints {
         }).save((err, doc) => {
             if (err) return done(err)
             idAdmin = doc._id
-            RouterTestPermissionsEndPoints.server = app.listen(3001, (error: Error) => {
-                let chaiHttp = require('chai-http');
-                chai.use(chaiHttp)
-                chai.should();
-                done(error)
-            })
+            RouterTestPermissionsEndPoints.server = app
+            let chaiHttp = require('chai-http');
+            chai.use(chaiHttp)
+            chai.should();
+            done()
         })
     }
     public static after(done) {
@@ -607,14 +610,18 @@ class RouterTestPermissionsEndPoints {
         chai.request(RouterTestPermissionsEndPoints.server)
             .get(`/${CUSTOMER}`)
             .end((err, res) => {
-                if (err) return done(err)
-                res.should.have.status(200)
-                res.body.total_pages.should.be.eql(0)
-                res.body.count.should.be.eql(0)
-                res.body.page.should.be.eql(1)
-                res.body.results.should.be.a('array')
-                res.body.results.length.should.be.eql(0)
-                done()
+                chai.request(RouterTestPermissionsEndPoints.server)
+                    .get(`/${CUSTOMER}`)
+                    .end((err, res) => {
+                        if (err) return done(err)
+                        res.should.have.status(200)
+                        res.body.total_pages.should.be.eql(0)
+                        res.body.count.should.be.eql(0)
+                        res.body.page.should.be.eql(1)
+                        res.body.results.should.be.a('array')
+                        res.body.results.length.should.be.eql(0)
+                        done()
+                    })
             })
     }
     @test("should get all Provider objects")

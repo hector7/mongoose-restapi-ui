@@ -1,5 +1,5 @@
 import { Request } from 'express'
-import { Document } from 'mongoose';
+import { Document, Model } from 'mongoose';
 import { IPermission } from '../models/permissionSchema';
 import { SchemaRolePermission } from '../models/roleSchema';
 import { IUser } from '../models/userSchema';
@@ -26,8 +26,6 @@ type FieldPath = RequiredAttrsPath & {
 }
 export type Path = FieldPath | ObjectPath | ArrayPath
 
-export type HasPermissionCallback = (error: Error, hasPermission?: boolean, reason?: string) => void
-
 export type UserRequest = Request & {
     user: IUser
 }
@@ -42,12 +40,11 @@ export type PermissionRequest<T extends Document> = EditRequest<T> & {
     role: PermissionEnum
 }
 
-type GetPermissionCallback = (error: Error, query: any) => void
-type GetPermission = (user: IUser, callback: GetPermissionCallback) => void
-type AddPermision = (user: IUser, callback: HasPermissionCallback) => void
-type EditPermision = (user: IUser, doc: Document, callback: HasPermissionCallback) => void
+type RequestFilterQuery = (req: Request, callback: (error: Error | null, query: { [key: string]: any }) => void) => void
+type EditPermision = (req: Request, doc: Document, callback: HasPermissionCallback) => void
+type AddPermision = (req: Request, callback: HasPermissionCallback) => void
 export type PermissionChecks = {
-    getQuery: GetPermission,
+    getFilterByPermissions?: RequestFilterQuery,
     hasAdminPermission: EditPermision,
     hasEditPermission: EditPermision,
     hasAddPermission: AddPermision,
@@ -58,12 +55,16 @@ export type ServeOptions = {
     MAX_RESULTS?: number,
     name?: string
 } & Partial<PermissionChecks>
+
+export type HasPermissionCallback = (error: Error | null, hasPermission: boolean, reason?: string) => void
+
+
 export type InfoModel = {
     name: string,
     label: string,
     route: string,
     paths: Path[],
-    model: any
+    model: Model<any>
 }
 
 export enum PermissionEnum {

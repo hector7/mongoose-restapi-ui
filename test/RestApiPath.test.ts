@@ -81,10 +81,7 @@ class RestApiPathTest {
         objectTest.arrayFullPaths.length.should.equal(0)
         objectTest.objectIdFullPaths.should.exist
         objectTest.booleanFullPaths.should.exist
-        objectTest.convertStep.should.exist
-        objectTest.projectionStep.should.exist
         objectTest.fullPathTypes.should.exist
-        objectTest.isNumber('array.number').should.equal(true)
         objectTest.setEndPoints([], null, null)
     }
     @test "constructor with strings has no mapped attributes"() {
@@ -107,10 +104,7 @@ class RestApiPathTest {
         objectTest.arrayFullPaths.length.should.equal(0)
         objectTest.objectIdFullPaths.should.exist
         objectTest.booleanFullPaths.should.exist
-        objectTest.convertStep.should.exist
-        objectTest.projectionStep.should.exist
         objectTest.fullPathTypes.should.exist
-        objectTest.isNumber('array.number').should.equal(false)
         objectTest.setEndPoints([], null, null)
     }
     @test "generates correct label from array"() {
@@ -131,6 +125,45 @@ class RestApiPathTest {
         } else {
             path.should.equal('array path must be complex')
         }
+    }
+    @test "array labels works"() {
+        const router = Router()
+        const model = mongoose.model('some', new mongoose.Schema({
+            array: [{ path1: { type: String, label: true }, path2: { type: String, label: true } }]
+        }))
+        let objectTest = new RestApiPath(router, RestApiPathTest.route, model, {})
+        const res: any = objectTest.paths.find(path => path.name === 'array')
+        res.label.should.exist
+        res.label.should.equal('path1')
+    }
+    @test "object labels works"() {
+        const router = Router()
+        const model = mongoose.model('some1', new mongoose.Schema({
+            obj: { path1: { type: String, label: true }, path2: { type: String, label: true } }
+        }))
+        let objectTest = new RestApiPath(router, RestApiPathTest.route, model, {})
+        const res: any = objectTest.paths.find(path => path.name === 'obj')
+        res.label.should.exist
+        res.label.should.equal('path1')
+    }
+    @test "schema from schema works"() {
+        const router = Router()
+        const model = mongoose.model('some2', new mongoose.Schema({
+            obj: new mongoose.Schema({ path1: { type: String }, path2: { type: String } })
+        }))
+        let objectTest = new RestApiPath(router, RestApiPathTest.route, model, {})
+        const res: any = objectTest.paths.find(path => path.name === 'obj')
+        res.should.exist
+    }
+    @test "schema from schema label works"() {
+        const router = Router()
+        const model = mongoose.model('some3', new mongoose.Schema({
+            obj: new mongoose.Schema({ path1: { type: String, label: true }, path2: { type: String, label: true } })
+        }))
+        let objectTest = new RestApiPath(router, RestApiPathTest.route, model, {})
+        const res: any = objectTest.paths.find(path => path.name === 'obj')
+        res.label.should.exist
+        res.label.should.equal('path1')
     }
     @test "edit permission works propertly with his priority hierarchy"() {
         const router = Router()
@@ -165,8 +198,6 @@ class RestApiPathTest {
             arrayNumber: [{ type: Number }],
         }))
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, newModel, {})
-        objectTest.transformationMap._arrayNumber.should.equal('__arrayNumber')
-        objectTest.transformationMap.arrayNumber.should.equal('___arrayNumber')
     }
     @test "generates correct tree from model"() {
         const newModel = mongoose.model('testTree', new Schema({
@@ -328,10 +359,10 @@ class RestApiPathTest {
         })
     }
     @test "get all objects with filter"(done) {
-        const getQuery = (req, callback) => {
+        const getFilterByPermissions = (req, callback) => {
             callback(null, { string: 'string' })
         }
-        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getQuery })
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getFilterByPermissions })
         objectTest1.setEndPoints([], null, null)
         const app1 = express()
         app1.use('/', objectTest1.router)
@@ -341,7 +372,45 @@ class RestApiPathTest {
                 .send('')
                 .end((err, res) => {
                     server.close((err) => {
+                        console.log(res.body)
                         res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with filter from not schema"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?query=algo`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(400)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with filterPermissionsError"(done) {
+        const getFilterByPermissions = (req, callback) => {
+            callback('some error')
+        }
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getFilterByPermissions })
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(500)
                         done()
                     })
                 })
@@ -364,7 +433,126 @@ class RestApiPathTest {
                 })
         })
     }
-    @test "get all objects handle error from getQuery"(done) {
+    @test "get all objects with sort and direction"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$sortBy=hector&$sort=asc`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with sort and multiple directions"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$sortBy=hector&$sort=asc&$sort=desc`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with multiple sort"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$sortBy=hector&$sortBy=jose&$sortBy=jose`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with multiple sort and single direction"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$sortBy=hector&$sortBy=jose&$sortBy=jose&$sort=asc`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with multiple sort and directions"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$sortBy=hector&$sortBy=jose&$sort=asc&$sort=desc`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with multiple sort and not all directions"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$sortBy=hector&$sortBy=jose&$sortBy=estela&$sort=asc&$sort=desc`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects with page and rowsperpage"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}?$page=1&$rowsPerPage=1`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get all objects handle error"(done) {
         mock('../src/models/query', './query.error.mock')
         const RestApiPath = mock.reRequire('../src/models/RestApiPath').default
         mock.stop('../src/models/query')
@@ -412,12 +600,12 @@ class RestApiPathTest {
                 })
         })
     }
-    @test "get all objects handle error from find"(done) {
-        mock('../src/models/query', './query_find.error.mock')
+    @test "get all objects handle cursor count error"(done) {
+        mock('../src/models/query', './query.error.cursor.count.mock')
         const RestApiPath = mock.reRequire('../src/models/RestApiPath').default
         mock.stop('../src/models/query')
         let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
-        objectTest1.setEndPoints([], null, null)
+        objectTest1.setEndPoints([])
         const app1 = express()
         app1.use('/', objectTest1.router)
         const server = app1.listen(3001, () => {
@@ -432,25 +620,17 @@ class RestApiPathTest {
                 })
         })
     }
-    @test "get all objects handle error from getQuery "(done) {
-        const r = Router()
-        r.use((req: any, res, next) => {
-            req.user = {
-                _id: 'a',
-                roles: []
-            }
-            next()
-        })
-        let objectTest1 = new RestApiPath(r, RestApiPathTest.route, RestApiPathTest.model, {})
-        objectTest1.options.getQuery = (req, callback) => {
-            callback(new Error('some error'), null)
-        }
-        objectTest1.setEndPoints([], RestApiPathTest.permission, RestApiPathTest.role)
+    @test "get all objects handle cursor find error"(done) {
+        mock('../src/models/query', './query.error.cursor.find.mock')
+        const RestApiPath = mock.reRequire('../src/models/RestApiPath').default
+        mock.stop('../src/models/query')
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([])
         const app1 = express()
         app1.use('/', objectTest1.router)
         const server = app1.listen(3001, () => {
             chai.request(server)
-                .get(`${RestApiPathTest.route}?$sortBy=hector`)
+                .get(`${RestApiPathTest.route}`)
                 .send('')
                 .end((err, res) => {
                     server.close((err) => {
@@ -460,33 +640,48 @@ class RestApiPathTest {
                 })
         })
     }
-    @test "post object handle error from addPermission"(done) {
-        const r = Router()
-        r.use((req: any, res, next) => {
-            req.user = { _id: RestApiPathTest.id }
-            next()
-        })
-        let objectTest1 = new RestApiPath(r, RestApiPathTest.route, RestApiPathTest.model, {})
-        const m = mongoose.model('permFake', permissionSchema)
-        m.prototype.save = (callback) => callback('some error')
-        objectTest1.setEndPoints([], m, null)
+    @test "get an object by id"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        objectTest1.setEndPoints([], null, null)
         const app1 = express()
         app1.use('/', objectTest1.router)
         const server = app1.listen(3001, () => {
             chai.request(server)
-                .post(`${RestApiPathTest.route}`)
-                .send(JSON.stringify(new RestApiPathTest.model({})))
+                .get(`${RestApiPathTest.route}/2`)
+                .send('')
                 .end((err, res) => {
                     server.close((err) => {
-                        res.should.have.status(500)
+                        res.should.have.status(404)
                         done()
                     })
                 })
         })
     }
-    @test "get an object by id"(done) {
-        const hasAdminPermission = (req, doc, cb) => cb(null, true)
-        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAdminPermission })
+    @test "get an object by id with filter (not auth)"(done) {
+        const getFilterByPermissions = (req, callback) => {
+            callback(null, { string: 'string2' })
+        }
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getFilterByPermissions })
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}/${RestApiPathTest.id}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(403)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get an object by id with filter (with auth)"(done) {
+        const getFilterByPermissions = (req, callback) => {
+            callback(null, { string: 'string' })
+        }
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getFilterByPermissions })
         objectTest1.setEndPoints([], null, null)
         const app1 = express()
         app1.use('/', objectTest1.router)
@@ -521,10 +716,56 @@ class RestApiPathTest {
     }
     @test "get an object by id getItem handle error"(done) {
         let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
-        objectTest1.getItem = (id, callback): Query<any> => {
-            callback(new Error('no passed'))
+        objectTest1.getItem = (conditions, callback): Query<any> => {
+            callback('no passed')
             return null
         }
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}/1`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(500)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get an object by id getItem handle error from getFilterByPermissions"(done) {
+        const getFilterByPermissions = (req, cb) => cb('no passed')
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { getFilterByPermissions })
+        objectTest1.setEndPoints([], null, null)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}/${RestApiPathTest.id}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(500)
+                        done()
+                    })
+                })
+        })
+    }
+    @test "get an object by id getItem handle error from find by name"(done) {
+        const findOne = (query, cb) => {
+            cb('some error')
+        }
+        const findById = (query, cb) => {
+            cb('some error')
+        }
+        const model: any = {
+            findOne,
+            findById,
+            schema: { paths: [] }
+        }
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, model, {})
         objectTest1.setEndPoints([], null, null)
         const app1 = express()
         app1.use('/', objectTest1.router)
@@ -652,8 +893,9 @@ class RestApiPathTest {
     }
     @test "check handle error on put method find mongo id"(done) {
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
-        objectTest.getItem = (id, callback): Query<any> => {
-            callback(new Error('no passed'))
+
+        objectTest.getItem = (conditions, callback): Query<any> => {
+            callback('no passed')
             return null
         }
 
@@ -804,8 +1046,8 @@ class RestApiPathTest {
     @test "check handle error on patch method find mongo id"(done) {
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
 
-        objectTest.getItem = (id, callback): Query<any> => {
-            callback(new Error('no passed'))
+        objectTest.getItem = (conditions, callback): Query<any> => {
+            callback('no passed')
             return null
         }
 

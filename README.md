@@ -63,10 +63,16 @@ Use react component [mongoose-restapi-ui-component](https://www.npmjs.com/packag
 
 
 ## API
-Default object is an extended express Router, please initialize as express Router.
+Default object is an extended express Router, please initialize as express Router. (Default mongodb api is v3.x)
 ```js
 import ApiRouter from 'mongoose-restapi-ui'
 const router = ApiRouter()
+```
+
+If your database is MongoDB 4.X, this library can use his new API ($any can filter numbers, _id, dates... as a contains)
+```js
+import ApiRouter from 'mongoose-restapi-ui'
+const router = ApiRouter({isMongo4: true})
 ```
 
 This object has the same properties as router, with other ones:
@@ -95,11 +101,16 @@ This object has the same properties as router, with other ones:
   </tr>
   <tr>
     <td><code>ServeOptions</code></td>
-    <td>{<br/><code>name</code>: string<br/><code>getPermissionStep</code>: GetPermissionCallback<br/><code>hasAddPermission</code>: (user: IUser, callback: RequestPermissionCallback)=>void)<br/><code>hasEditPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
+    <td>{<br/><code>name</code>: string<br/><code>getFilterByPermissions</code>: FilterByPermissions<br/><code>hasAddPermission</code>: RequestPermission<br/><code>hasEditPermission</code>: RequestPermission<br/><code>hasUpdatePermission</code>: RequestPermission<br/><code>hasDeletePermission</code>: RequestPermission<br/>}</td>
     <td>Switch path <code>name</code> as the name label for UI purpose as complex objects.</td>
   </tr>
   <tr>
-    <td><code>GetPermissionCallback(err, query)</code></td>
+    <td><code>FilterByPermissions(req, callback)</code></td>
+    <td>req: <code>express.Request</code><br/>callback: <code>FilterByPermissionsCallback</code></td>
+    <td>Function in order to get a pre-filter query (query), for a custom permissions setup.</td>
+  </tr>
+  <tr>
+    <td><code>FilterByPermissionsCallback(err, query)</code></td>
     <td>err: <code>Error</code><br/>query: <code>Object</code></td>
     <td>Callback called in order to get a pre-filter query (query), for a custom permissions setup.</td>
   </tr>
