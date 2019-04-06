@@ -33,6 +33,9 @@ export type UserRequest = Request & {
 export type EditRequest<T extends Document> = UserRequest & {
     doc: T
 }
+export type EditPermRequest<T extends Document> = EditRequest<T> & {
+    doc_perm: IPermission
+}
 
 export type PermissionRequest<T extends Document> = EditRequest<T> & {
     perm: IPermission,

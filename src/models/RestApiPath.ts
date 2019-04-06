@@ -1,7 +1,7 @@
 import { Model, SchemaType, Document, DocumentQuery, Types } from 'mongoose';
 import { Router, Request, Response } from 'express'
 import { EventEmitter } from 'events';
-import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath, PermissionRequest, EditRequest, UserRequest, PermissionEnum } from '../definitions/model'
+import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath, PermissionRequest, EditRequest, UserRequest, PermissionEnum, EditPermRequest } from '../definitions/model'
 import * as utils from '../utils'
 import getQuery from './query'
 import { IPermission } from './permissionSchema';
@@ -354,9 +354,6 @@ export default class RestApiPath<T extends Document> {
                 if (err) return res.status(500).send(err.message)
                 const { $page, $rowsPerPage, $sort, $sortBy, ...others } = req.query
                 if (Object.keys(others).filter(key => !this.fullPathTypes.hasOwnProperty(key) && key !== '$any').length > 0) {
-                    console.log('bad operation')
-                    console.log(query)
-                    console.log(Object.keys(others).filter(key => !this.fullPathTypes.hasOwnProperty(key)))
                     return res.status(400).send('Path ' + Object.keys(others).find(key => !this.fullPathTypes.hasOwnProperty(key)) + ' not in schema')
                 }
                 getQuery(this.isMongo4, models, this.model, this, others, query, (err, cursor: DocumentQuery<T, T>) => {
@@ -402,7 +399,7 @@ export default class RestApiPath<T extends Document> {
             })
         });
         this.router.post(`${this.route}`, (req: PermissionRequest<T>, res: Response) => {
-            if (!req.body) return res.status(401).send('body is empty')
+            if (!req.body) return res.status(400).send('Body is empty')
             let item = new this.model(req.body)
             utils.replaceObjectIds(this.paths, item)
             permission.hasAddPermission(req, (err, hasPermission, message) => {
@@ -422,7 +419,7 @@ export default class RestApiPath<T extends Document> {
             })
         });
         this.router.put(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            if (!req.body) return res.status(401).send('body is empty')
+            if (!req.body) return res.status(400).send('Body is empty')
             const oldItem = req.doc.toObject()
             permission.hasUpdatePermission(req, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
@@ -445,7 +442,7 @@ export default class RestApiPath<T extends Document> {
             });
         });
         this.router.patch(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            if (!req.body) return res.status(401).send('body is empty')
+            if (!req.body) return res.status(400).send('body is empty')
             const oldItem = req.doc.toObject()
             permission.hasUpdatePermission(req, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
@@ -497,62 +494,55 @@ export default class RestApiPath<T extends Document> {
             })
         })
 
-        this.router.get(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
+        this.router.use(`${this.route}/:id/permission/user/:user`, (req: EditPermRequest<T>, res: Response, next) => {
             Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
                 if (err) return res.status(500).send(err.message)
-                res.send(doc)
+                req.doc_perm = doc
+                next()
             })
         })
 
-        this.router.post(`${this.route}/:id/permission/user`, (req: EditRequest<T>, res: Response) => {
-            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.body.user) }, (err, doc) => {
+        this.router.get(`${this.route}/:id/permission/user/:user`, (req: EditPermRequest<T>, res: Response) => {
+            res.send(req.doc_perm)
+        })
+
+        this.router.post(`${this.route}/:id/permission/user/:user`, (req: EditPermRequest<T>, res: Response) => {
+            if (req.doc_perm) return res.status(402).send('This user has a permission on this object.')
+            const permission = new Permission({ ...req.body, table })
+            permission.object = req.doc._id
+            permission.save((err) => {
                 if (err) return res.status(500).send(err.message)
-                if (doc) return res.status(402).send('This user has a permission on this object.')
-                const permission = new Permission({ ...req.body, table })
-                permission.object = req.doc._id
-                permission.save((err) => {
-                    if (err) return res.status(500).send(err.message)
-                    res.status(201).send(permission)
-                })
+                res.status(201).send(permission)
             })
         })
 
-        this.router.put(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
-            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
+        this.router.put(`${this.route}/:id/permission/user/:user`, (req: EditPermRequest<T>, res: Response) => {
+            if (!req.doc_perm) return res.status(404).send(`Object ${req.params.id} not found on ${table} permissions table.`)
+            if (req.body.read) req.doc_perm.permission = PermissionEnum.READ
+            if (req.body.write) req.doc_perm.permission = PermissionEnum.DELETE
+            if (req.body.admin) req.doc_perm.permission = PermissionEnum.ADMIN
+            req.doc_perm.save((err) => {
                 if (err) return res.status(500).send(err.message)
-                if (!doc) return res.status(404).send(`Object ${req.params.id} not found on ${table} permissions table.`)
-                if (req.body.read) doc.permission = PermissionEnum.READ
-                if (req.body.write) doc.permission = PermissionEnum.DELETE
-                if (req.body.admin) doc.permission = PermissionEnum.ADMIN
-                doc.save((err) => {
-                    if (err) return res.status(500).send(err.message)
-                    res.status(200).send(doc)
-                })
+                res.status(200).send(req.doc_perm)
             })
         })
 
-        this.router.patch(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
-            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
+        this.router.patch(`${this.route}/:id/permission/user/:user`, (req: EditPermRequest<T>, res: Response) => {
+            if (!req.doc_perm) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
+            if (req.body.read) req.doc_perm.permission = PermissionEnum.READ
+            if (req.body.write) req.doc_perm.permission = PermissionEnum.DELETE
+            if (req.body.admin) req.doc_perm.permission = PermissionEnum.ADMIN
+            req.doc_perm.save((err) => {
                 if (err) return res.status(500).send(err.message)
-                if (!doc) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
-                if (req.body.read) doc.permission = PermissionEnum.READ
-                if (req.body.write) doc.permission = PermissionEnum.DELETE
-                if (req.body.admin) doc.permission = PermissionEnum.ADMIN
-                doc.save((err) => {
-                    if (err) return res.status(500).send(err.message)
-                    res.status(200).send(doc)
-                })
+                res.status(200).send(req.doc_perm)
             })
         })
 
-        this.router.delete(`${this.route}/:id/permission/user/:user`, (req: EditRequest<T>, res: Response) => {
-            Permission.findOne({ table, object: req.doc._id, user: Types.ObjectId(req.params.user) }, (err, doc) => {
+        this.router.delete(`${this.route}/:id/permission/user/:user`, (req: EditPermRequest<T>, res: Response) => {
+            if (!req.doc_perm) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
+            req.doc_perm.remove((err) => {
                 if (err) return res.status(500).send(err.message)
-                if (!doc) return res.status(404).send(`Object ${req.doc._id} not found on ${table} permissions table for you.`)
-                doc.remove((err) => {
-                    if (err) return res.status(500).send(err.message)
-                    res.send(doc)
-                })
+                res.send(req.doc_perm)
             })
         })
         return permission

@@ -358,6 +358,24 @@ class RestApiPathTest {
                 })
         })
     }
+    @test "get all objects with permission but without user"(done) {
+        let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        const p: any = {}
+        objectTest1.setEndPoints([], p, p)
+        const app1 = express()
+        app1.use('/', objectTest1.router)
+        const server = app1.listen(3001, () => {
+            chai.request(server)
+                .get(`${RestApiPathTest.route}`)
+                .send('')
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(500)
+                        done()
+                    })
+                })
+        })
+    }
     @test "get all objects with filter"(done) {
         const getFilterByPermissions = (req, callback) => {
             callback(null, { string: 'string' })
@@ -372,7 +390,6 @@ class RestApiPathTest {
                 .send('')
                 .end((err, res) => {
                     server.close((err) => {
-                        console.log(res.body)
                         res.should.have.status(200)
                         done()
                     })
@@ -716,6 +733,7 @@ class RestApiPathTest {
     }
     @test "get an object by id getItem handle error"(done) {
         let objectTest1 = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
+        const originalGetItem = objectTest1.getItem
         objectTest1.getItem = (conditions, callback): Query<any> => {
             callback('no passed')
             return null
@@ -729,6 +747,7 @@ class RestApiPathTest {
                 .send('')
                 .end((err, res) => {
                     server.close((err) => {
+                        objectTest1.getItem = originalGetItem
                         res.should.have.status(500)
                         done()
                     })
@@ -872,8 +891,10 @@ class RestApiPathTest {
     @test "check post save handle error"(done) {
         RestApiPathTest.model.findById(RestApiPathTest.id, (err, object) => {
             if (err) return done(err)
+            const { _id, ...attrs } = object
             const hasAddPermission = (req, callback) => callback(null, true)
             let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAddPermission })
+            const originalSave = objectTest.model.prototype.save
             objectTest.model.prototype.save = (callback) => callback('some error')
             objectTest.setEndPoints([], null, null)
             const app = express()
@@ -881,7 +902,58 @@ class RestApiPathTest {
             const server = app.listen(3003, () => {
                 chai.request(server)
                     .post(`/test`)
-                    .send(JSON.stringify(object))
+                    .send(JSON.stringify(attrs))
+                    .end((err, res) => {
+                        server.close((err) => {
+                            objectTest.model.prototype.save = originalSave
+                            res.should.have.status(500)
+                            done()
+                        })
+                    })
+            })
+        })
+    }
+    @test "check post without body"(done) {
+        RestApiPathTest.model.findById(RestApiPathTest.id, (err, object) => {
+            if (err) return done(err)
+            const hasAddPermission = (req, callback) => callback(null, true)
+            let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAddPermission })
+            objectTest.setEndPoints([], null, null)
+            const app = express()
+            app.use('/', objectTest.router)
+            const server = app.listen(3003, () => {
+                chai.request(server)
+                    .post(`/test`)
+                    .send('')
+                    .end((err, res) => {
+                        server.close((err) => {
+                            res.should.have.status(400)
+                            done()
+                        })
+                    })
+            })
+        })
+    }
+    @test "check post save permission handle error"(done) {
+        RestApiPathTest.model.findById(RestApiPathTest.id, (err, object) => {
+            if (err) return done(err)
+            const { _id, ...attrs } = object
+            const hasAddPermission = (req, callback) => callback(null, true)
+            let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAddPermission })
+            const p: any = class P {
+                save = (cb: (err: Error) => void) => cb(new Error('controlled error'))
+            }
+            objectTest.setEndPoints([], p, p)
+            const app = express()
+            app.use((req: any, res, next) => {
+                req.user = { _id: 1 }
+                next()
+            })
+            app.use('/', objectTest.router)
+            const server = app.listen(3003, () => {
+                chai.request(server)
+                    .post(`/test`)
+                    .send(JSON.stringify(attrs))
                     .end((err, res) => {
                         server.close((err) => {
                             res.should.have.status(500)
@@ -891,9 +963,57 @@ class RestApiPathTest {
             })
         })
     }
+    @test "check put without body"(done) {
+        RestApiPathTest.model.findById(RestApiPathTest.id, (err, object) => {
+            if (err) return done(err)
+            const hasAddPermission = (req, callback) => callback(null, true)
+            let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAddPermission })
+            const originalSave = objectTest.model.prototype.save
+            objectTest.model.prototype.save = (callback) => callback('some error')
+            objectTest.setEndPoints([], null, null)
+            const app = express()
+            app.use('/', objectTest.router)
+            const server = app.listen(3003, () => {
+                chai.request(server)
+                    .put(`/test/${RestApiPathTest.id}`)
+                    .send('')
+                    .end((err, res) => {
+                        server.close((err) => {
+                            objectTest.model.prototype.save = originalSave
+                            res.should.have.status(400)
+                            done()
+                        })
+                    })
+            })
+        })
+    }
+    @test "check patch without body"(done) {
+        RestApiPathTest.model.findById(RestApiPathTest.id, (err, object) => {
+            if (err) return done(err)
+            const hasAddPermission = (req, callback) => callback(null, true)
+            let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAddPermission })
+            const originalSave = objectTest.model.prototype.save
+            objectTest.model.prototype.save = (callback) => callback('some error')
+            objectTest.setEndPoints([], null, null)
+            const app = express()
+            app.use('/', objectTest.router)
+            const server = app.listen(3003, () => {
+                chai.request(server)
+                    .patch(`/test/${RestApiPathTest.id}`)
+                    .send('')
+                    .end((err, res) => {
+                        server.close((err) => {
+                            objectTest.model.prototype.save = originalSave
+                            res.should.have.status(400)
+                            done()
+                        })
+                    })
+            })
+        })
+    }
     @test "check handle error on put method find mongo id"(done) {
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
-
+        const originalGetItem = objectTest.getItem
         objectTest.getItem = (conditions, callback): Query<any> => {
             callback('no passed')
             return null
@@ -908,6 +1028,7 @@ class RestApiPathTest {
                     .put(`/test/${RestApiPathTest.id}`)
                     .send('')
                     .end((err, res) => {
+                        objectTest.getItem = originalGetItem
                         server.close((err) => {
                             res.should.have.status(500)
                             done()
@@ -1023,6 +1144,7 @@ class RestApiPathTest {
         RestApiPathTest.model.findById(RestApiPathTest.id, (err, object) => {
             if (err) return done(err)
             let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAdminPermission })
+            const originalGetItem = objectTest.getItem
             objectTest.getItem = (id, callback) => {
                 object.save = (callback) => callback(new Error('some error'))
                 return callback(null, object)
@@ -1035,6 +1157,7 @@ class RestApiPathTest {
                     .put(`/test/${RestApiPathTest.id}`)
                     .send(JSON.stringify(object))
                     .end((err, res) => {
+                        objectTest.getItem = originalGetItem
                         server.close((err) => {
                             res.should.have.status(500)
                             done()
@@ -1045,7 +1168,7 @@ class RestApiPathTest {
     }
     @test "check handle error on patch method find mongo id"(done) {
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
-
+        const originalGetItem = objectTest.getItem
         objectTest.getItem = (conditions, callback): Query<any> => {
             callback('no passed')
             return null
@@ -1060,6 +1183,7 @@ class RestApiPathTest {
                     .patch(`/test/${RestApiPathTest.id}`)
                     .send('')
                     .end((err, res) => {
+                        objectTest.getItem = originalGetItem
                         server.close((err) => {
                             res.should.have.status(500)
                             done()
@@ -1156,6 +1280,7 @@ class RestApiPathTest {
     @test "check hasUpdatePermission patch save handle error"(done) {
         const hasAdminPermission = (req, doc, callback) => callback(null, true)
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAdminPermission })
+        const originalGetItem = objectTest.getItem
         objectTest.getItem = (id, callback) => {
             RestApiPathTest.model.findById(RestApiPathTest.id, (err, res) => {
                 if (err) return callback(err)
@@ -1171,6 +1296,7 @@ class RestApiPathTest {
                 .patch(`/test/${RestApiPathTest.id}`)
                 .send('{}')
                 .end((err, res) => {
+                    objectTest.getItem = originalGetItem
                     server.close((err) => {
                         res.should.have.status(500)
                         done()
@@ -1180,7 +1306,7 @@ class RestApiPathTest {
     }
     @test "check handle error on delete method find mongo id"(done) {
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, {})
-
+        const originalGetItem = objectTest.getItem
         objectTest.getItem = (id, callback): Query<any> => {
             callback(new Error('no passed'))
             return null
@@ -1195,6 +1321,7 @@ class RestApiPathTest {
                     .delete(`/test/${RestApiPathTest.id}`)
                     .send('')
                     .end((err, res) => {
+                        objectTest.getItem = originalGetItem
                         server.close((err) => {
                             res.should.have.status(500)
                             done()
@@ -1292,6 +1419,7 @@ class RestApiPathTest {
     @test "check handle error on delete mongo id"(done) {
         const hasAdminPermission = (req, doc, callback) => callback(null, true)
         let objectTest = new RestApiPath(Router(), RestApiPathTest.route, RestApiPathTest.model, { hasAdminPermission })
+        const originalGetItem = objectTest.getItem
         objectTest.getItem = (id, callback): Query<any> => {
             callback(null, { remove: (callback) => callback('no passed') })
             return null
@@ -1305,6 +1433,7 @@ class RestApiPathTest {
                     .delete(`/test/${RestApiPathTest.id}`)
                     .send('')
                     .end((err, res) => {
+                        objectTest.getItem = originalGetItem
                         server.close((err) => {
                             res.should.have.status(400)
                             done()
@@ -1523,11 +1652,15 @@ class RestApiPathPermissionRootTest {
             callback(null, true)
         }
         let objectTest = new RestApiPath(r, RestApiPathPermissionRootTest.route, RestApiPathPermissionRootTest.model, { hasAdminPermission })
-        const perm: any = RestApiPathPermissionRootTest.connection.model('permFaje', permissionSchema)
-        perm.findOne = (doc, callback) => {
-            callback('some error')
+        const perm: any = RestApiPathPermissionRootTest.permission
+        const findOne = perm.findOne.bind(perm)
+        let it = 0
+        const mockedFindOne = (...args) => {
+            if (it++ === 0) return findOne(...args)
+            args[1]('some error findOne...')
         }
-        objectTest.setEndPoints([], perm, null)
+        const res: any = { findOne: mockedFindOne }
+        objectTest.setEndPoints([], res, null)
         const app = express()
         app.use('/', objectTest.router)
         const server = app.listen(3003, () => {
@@ -1636,7 +1769,7 @@ class RestApiPathPermissionRootTest {
         app.use('/', objectTest.router)
         const server = app.listen(3003, () => {
             chai.request(server)
-                .post(`/test/${RestApiPathPermissionRootTest.id}/permission/user`)
+                .post(`/test/${RestApiPathPermissionRootTest.id}/permission/user/${RestApiPathPermissionRootTest.id}`)
                 .send(JSON.stringify({ read: true, user: RestApiPathPermissionRootTest.id }))
                 .end((err, res) => {
                     server.close((err) => {
@@ -1662,40 +1795,11 @@ class RestApiPathPermissionRootTest {
         app.use('/', objectTest.router)
         const server = app.listen(3003, () => {
             chai.request(server)
-                .post(`/test/${RestApiPathPermissionRootTest.id}/permission/user`)
+                .post(`/test/${RestApiPathPermissionRootTest.id}/permission/user/${RestApiPathPermissionRootTest.id}`)
                 .send(JSON.stringify({ read: true, user: RestApiPathPermissionRootTest.id }))
                 .end((err, res) => {
                     server.close((err) => {
                         res.should.have.status(402)
-                        done()
-                    })
-                })
-        })
-    }
-    @test 'add permission with error on find'(done) {
-        const r = Router()
-        r.use((req: any, res, next) => {
-            req.user = { _id: RestApiPathTest.id }
-            next()
-        })
-        const hasAdminPermission = (req, id, callback) => {
-            callback(null, true)
-        }
-        let objectTest = new RestApiPath(r, RestApiPathPermissionRootTest.route, RestApiPathPermissionRootTest.model, { hasAdminPermission })
-        const perm: any = RestApiPathPermissionRootTest.connection.model('permFake', permissionSchema)
-        perm.findOne = (doc, callback) => {
-            callback('some error')
-        }
-        objectTest.setEndPoints([], perm, null)
-        const app = express()
-        app.use('/', objectTest.router)
-        const server = app.listen(3003, () => {
-            chai.request(server)
-                .post(`/test/${RestApiPathPermissionRootTest.id}/permission/user`)
-                .send(JSON.stringify({ read: true, user: RestApiPathPermissionRootTest.id }))
-                .end((err, res) => {
-                    server.close((err) => {
-                        res.should.have.status(500)
                         done()
                     })
                 })
@@ -1725,7 +1829,7 @@ class RestApiPathPermissionRootTest {
         app.use('/', objectTest.router)
         const server = app.listen(3003, () => {
             chai.request(server)
-                .post(`/test/${RestApiPathPermissionRootTest.id}/permission/user`)
+                .post(`/test/${RestApiPathPermissionRootTest.id}/permission/user/${RestApiPathPermissionRootTest.id}`)
                 .send(JSON.stringify({ read: true, user: RestApiPathPermissionRootTest.id }))
                 .end((err, res) => {
                     server.close((err) => {
@@ -1855,6 +1959,32 @@ class RestApiPathPermissionRootTest {
             chai.request(server)
                 .put(`/test/${RestApiPathPermissionRootTest.id}/permission/user/${RestApiPathPermissionRootTest.id}`)
                 .send(JSON.stringify({ read: true, admin: true, write: true }))
+                .end((err, res) => {
+                    server.close((err) => {
+                        res.should.have.status(200)
+                        done()
+                    })
+                })
+        })
+    }
+    @test 'put permission different options'(done) {
+        const r = Router()
+        r.use((req: any, res, next) => {
+            req.user = { _id: RestApiPathTest.id }
+            next()
+        })
+        const hasAdminPermission = (req, id, callback) => {
+            callback(null, true)
+        }
+        let objectTest = new RestApiPath(r, RestApiPathPermissionRootTest.route, RestApiPathPermissionRootTest.model, { hasAdminPermission })
+        const perm: any = RestApiPathPermissionRootTest.permission
+        objectTest.setEndPoints([], perm, null)
+        const app = express()
+        app.use('/', objectTest.router)
+        const server = app.listen(3003, () => {
+            chai.request(server)
+                .put(`/test/${RestApiPathPermissionRootTest.id}/permission/user/${RestApiPathPermissionRootTest.id}`)
+                .send(JSON.stringify({ read: false, admin: true, write: true }))
                 .end((err, res) => {
                     server.close((err) => {
                         res.should.have.status(200)

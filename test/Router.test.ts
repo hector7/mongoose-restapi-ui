@@ -54,7 +54,7 @@ class RouterTest {
         RouterTest.customer = RouterTest.connection.model(CUSTOMER, customerSchema);
         RouterTest.provider = RouterTest.connection.model(PROVIDER, providerSchema);
 
-        const router = ApiRouter({ strict: true })
+        const router = ApiRouter()
         router.setGlobalRoute('/')
         router.setModel(`/${PROVIDER}`, RouterTest.provider, { hasAdminPermission: hasPerm, hasEditPermission: hasPerm, hasAddPermission: hasAddPerm })
         router.setModel(`/${CUSTOMER}`, RouterTest.customer, { hasAdminPermission: hasPerm, hasEditPermission: hasPerm, hasAddPermission: hasAddPerm, name: 'name' })
