@@ -4,7 +4,7 @@
   "description": "Rest api library for your mongoose apps, with react ui: mongoose-restapi-ui-component react library",
   "main": "src/router.js",
   "scripts": {
-    "start": "ts-node ./demo/index.ts",
+    "start": "npm run pretest && ts-node ./demo/index.ts",
     "prepublishOnly": "tsc --declaration",
     "pretest": "find src -name \"*.d.ts\" -type f -delete && find src -name \"*.js\" -type f -delete && find src -name \"*.js.map\" -type f -delete && tsc",
     "test": "nyc mocha",
