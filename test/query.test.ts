@@ -475,11 +475,22 @@ describe('SimpleQueryTest', () => {
     createRefTest('find by array ref', 'Provider', ['hector'])
     it('Find by $any with prevFilter', (done) => {
         const query = {
-            $any: '2'
+            name: 'jose'
         }
         getQuery(false, getModels(), Customer, CustomerCtx, query, { name: 'hector' }, (err, docs) => {
             if (err) return done(err)
-            done()
+            docs.find((err, res) => {
+                if (err) return done(err)
+                res.length.should.equal(0)
+                getQuery(false, getModels(), Customer, CustomerCtx, query, { name: 'jose' }, (err, docs) => {
+                    if (err) return done(err)
+                    docs.find((err, res) => {
+                        if (err) return done(err)
+                        res.length.should.equal(1)
+                        done()
+                    })
+                })
+            })
         })
     })
     it('Find by multi refs', (done) => {

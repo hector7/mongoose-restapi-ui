@@ -175,7 +175,7 @@ export class Query {
         }
         return aggregation
     }
-    query(callback) {
+    query(prevFilter: { [key: string]: any }, callback) {
         const convertStep: any[] = this._convertStep()
         if (this.hasRefs) {
             let aggregation: any[] = this.refPaths.map(el => {
@@ -207,7 +207,7 @@ export class Query {
             }])
             return this.model.aggregate(aggregation, (err, res) => {
                 if (err) return callback(err)
-                callback(null, this.model.find({ _id: { $in: res.map(e => e._id) } }))
+                callback(null, this.model.find({ $and: [prevFilter, { _id: { $in: res.map(e => e._id) } }] }))
             })
         }
         if (convertStep.length > 0) {
@@ -219,14 +219,14 @@ export class Query {
                 }
             }]), (err, res) => {
                 if (err) return callback(err)
-                callback(null, this.model.find({ _id: { $in: res.map(e => e._id) } }))
+                callback(null, this.model.find({ $and: [prevFilter, { _id: { $in: res.map(e => e._id) } }] }))
             })
         }
-        return callback(null, this.model.find(this._basicQuery))
+        return callback(null, this.model.find({ $and: [prevFilter, this._basicQuery] }))
     }
 }
 export default (mongo4: boolean, models: { [key: string]: InfoModel }, model: Model<any>,
-    ctx: CtxType, query: { [key: string]: string | string[] }, prevFilter: any, callback: (err: Error, cursor?: DocumentQuery<any, any>) => void) => {
+    ctx: CtxType, query: { [key: string]: string | string[] }, prevFilter: { [key: string]: any }, callback: (err: Error, cursor?: DocumentQuery<any, any>) => void) => {
 
     if (Object.keys(query).filter(key => key !== '$any').some(key => !ctx.fullPathTypes.hasOwnProperty(key)))
         return callback(new Error(Object.keys(query).filter(key => key !== '$any').find(key => !ctx.fullPathTypes.hasOwnProperty(key)) + ' not in schema.'))
@@ -236,5 +236,5 @@ export default (mongo4: boolean, models: { [key: string]: InfoModel }, model: Mo
             obj[key] = query[key]
             return obj
         }, {}), models, model, mongo4)
-    return q.query(callback)
+    return q.query(prevFilter ? prevFilter : {}, callback)
 }
