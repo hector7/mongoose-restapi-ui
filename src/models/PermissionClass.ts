@@ -33,17 +33,30 @@ export default class PermissionClass {
         if (this.role) {
             if (!user.roles) return callback(null, 0)
             if (user.roles.length === 0) return callback(null, 0)
-            this.role.find({ 'schemas.name': this.table, _id: { $in: user.roles } }, (err, roles) => {
+            this.role.aggregate([
+                {
+                    $match: {
+                        _id: { $in: user.roles }
+                    }
+                },
+                {
+                    $unwind: '$schemas'
+                },
+                {
+                    $match: {
+                        'schemas.name': this.table
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        maxPermission: { $max: '$schemas.permission' }
+                    }
+                }
+            ], (err, res) => {
                 if (err) return callback(err)
-                let perm = 0
-                roles.forEach(role => {
-                    const maxPerm = role.schemas.filter(s => s.name === this.table).reduce((curr, next) => {
-                        return Math.max(curr, next.permission)
-                    }, 0)
-                    if (perm < maxPerm)
-                        perm = maxPerm
-                })
-                callback(null, perm)
+                if (res.length === 0) return callback(null, 0)
+                callback(null, res[0].maxPermission)
             })
         } else {
             //by default permission to delete (without permissions).
@@ -57,6 +70,11 @@ export default class PermissionClass {
             return false
         }
         return true
+    }
+
+    public getMaxPermissionByTable(req: UserRequest, callback: (err: Error, perm?: PermissionEnum) => void) {
+        if (this.role) return this._getUserRoles(req.user, callback)
+        callback(null, PermissionEnum.ADD)
     }
 
     private _getMaxPermissionByDoc(user: IUser, doc: Document, callback: (err: Error, perm?: PermissionEnum) => void) {
@@ -117,7 +135,7 @@ export default class PermissionClass {
         })
     }
 
-    private _hasAddPermissionByOptions(req: Request, callback: HasPermissionCallback) {
+    private _hasAddPermissionByOptions(req: UserRequest, callback: HasPermissionCallback) {
         if (this.options.hasAddPermission) return this.options.hasAddPermission(req, callback)
         callback(null, this.role ? false : true)
     }
@@ -130,7 +148,7 @@ export default class PermissionClass {
         })
     }
 
-    private _hasUpdatePermissionByOptions(req: Request, doc: Document, callback: HasPermissionCallback) {
+    private _hasUpdatePermissionByOptions(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
         if (this.options.hasUpdatePermission) return this.options.hasUpdatePermission(req, doc, callback)
         callback(null, this.role ? false : true)
     }
@@ -147,7 +165,7 @@ export default class PermissionClass {
         })
     }
 
-    private _hasDeletePermissionByOptions(req: Request, doc: Document, callback: HasPermissionCallback) {
+    private _hasDeletePermissionByOptions(req: UserRequest, doc: Document, callback: HasPermissionCallback) {
         if (this.options.hasDeletePermission) return this.options.hasDeletePermission(req, doc, callback)
         callback(null, this.role ? false : true)
     }

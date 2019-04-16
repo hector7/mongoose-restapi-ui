@@ -11,8 +11,8 @@ const router = ApiRouter()
 
 const customer = mongoose.model('Customer', new mongoose.Schema({
     complex: {
-        name: String,
-        number: Number
+        name: { type: String },
+        number: { type: Number, label: true }
     },
     name: { type: String, required: true },
     comment: { type: String },
@@ -26,23 +26,31 @@ const provider = mongoose.model('Provider', new mongoose.Schema({
         type: [{ hola: { type: String, required: true, label: true }, adios: { type: String, required: true } }],
         required: true,
     },
+    complex: {
+        label: { type: String, label: true }
+    },
+    complexArrayRef: [{
+        name: String,
+        customer: {ref: 'Customer', type: mongoose.Schema.Types.ObjectId, label: true }
+    }],
     customer: [{
         ref: 'Customer', type: mongoose.Schema.Types.ObjectId
     }],
     comment: { type: String }
 }))
 const user = mongoose.model('User', new mongoose.Schema({
-    name: String
+    name: String,
+    roles: [mongoose.Schema.Types.ObjectId]
 }))
 const userId = new user()
-app.use((req, res, next)=>{
+app.use((req, res, next) => {
     req.user = userId
     next()
 })
 router.setGlobalRoute('')
-router.setConnection(mongoose)
-router.setModel('/customer', customer, { name: 'name' })
-router.setModel('/provider', provider)
+//router.setConnection(mongoose)
+router.setModel('/customer', customer, { name: 'name', hasAddPermission: (req, cb) => cb(null, true) })
+router.setModel('/provider', provider, { hasAddPermission: (req, cb) => cb(null, true) })
 app.use('/', router)
 app.get('/tree', router.publishUiTree())
 app.listen(3030, () => {

@@ -1,7 +1,7 @@
 import { Model, Document } from 'mongoose';
 import { Router, Request } from 'express'
 import { EventEmitter } from 'events';
-import { InfoModel, ServeOptions, PermissionChecks, PermissionRequest } from '../definitions/model'
+import { InfoModel, ServeOptions, PermissionChecks } from '../definitions/model'
 import RestApiPath from '../models/RestApiPath'
 import { IPermission } from '../models/permissionSchema';
 import { IRole } from '../models/roleSchema';
@@ -19,5 +19,6 @@ export default function <T extends Document>(router: Router, route: string, mode
     emitter.hasDeletePermission = permissions.hasDeletePermission.bind(permissions)
     emitter.hasAdminPermission = permissions.hasAdminPermission.bind(permissions)
     emitter.getFilterByPermissions = permissions.getReadQuery.bind(permissions)
+    emitter.getMaxPermission = permissions.getMaxPermissionByTable.bind(permissions)
     return { infoModel: path.infoModel, emitter: <RichEmitter>emitter }
 }

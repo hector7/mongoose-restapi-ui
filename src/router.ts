@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { Model, Schema, Document } from 'mongoose'
 import { RequestHandler, RouterOptions } from 'express'
 
-import { ServeOptions, PERMISSION_MODEL, ROLE_MODEL, PermissionChecks } from './definitions/model'
+import { ServeOptions, PERMISSION_MODEL, ROLE_MODEL, PermissionChecks, InfoModel, UserRequest } from './definitions/model'
 import permissionSchema, { IPermission } from './models/permissionSchema'
 
 import serveApi from './controllers/model'
@@ -23,7 +23,7 @@ function ApiRouter(): ApiRouter
 function ApiRouter(options: { isMongo4?: boolean } & RouterOptions): ApiRouter
 function ApiRouter(options = { isMongo4: false }): ApiRouter {
     const { isMongo4, ...routerOptions } = options
-    let models = {}
+    let models: { [modelName: string]: { infoModel: InfoModel, emitter: PermissionChecks } } = {}
     const router: ApiRouter = Router(routerOptions)
     let permissionModel: Model<IPermission> = null
     let roleModel: Model<IRole> = null
@@ -39,12 +39,22 @@ function ApiRouter(options = { isMongo4: false }): ApiRouter {
     router.setModel = <T extends Document>(route, model, serveOptions) => {
         const { infoModel, emitter } = serveApi<T>(router, route, model, models, permissionModel, roleModel, serveOptions, isMongo4)
         infoModel.route = `${globalRoute}${route}`
-        models[infoModel.name] = infoModel
+        models[infoModel.name] = { infoModel, emitter }
         return emitter
     }
     router.publishUiTree = () => {
-        return (req, res) => {
-            res.send(Object.keys(models).map(key => models[key]))
+        return (req: UserRequest, response) => {
+            let map = []
+            let target = Object.keys(models).length
+            Object.keys(models).forEach(key => {
+                models[key].emitter.getMaxPermission(req, (err, perm) => {
+                    if (err) return response.status(500).send(err.message)
+                    map.push({ ...models[key].infoModel, perm })
+                    if(map.length === target){
+                        response.send(map)
+                    }
+                })
+            })
         }
     }
 

@@ -531,6 +531,8 @@ class RouterTestPermissionsEndPoints {
     public static customerRef
     public static connection: Connection
     public static server: any
+    public static router: ApiRouter
+    public static schema: any
     public static customer: Model<any>
     public static provider: Model<any>
 
@@ -558,7 +560,8 @@ class RouterTestPermissionsEndPoints {
         RouterTestPermissionsEndPoints.customer = RouterTestPermissionsEndPoints.connection.model(CUSTOMER, customerSchema);
         RouterTestPermissionsEndPoints.provider = RouterTestPermissionsEndPoints.connection.model(PROVIDER, providerSchema);
 
-        const router = ApiRouter({ strict: true })
+        RouterTestPermissionsEndPoints.router = ApiRouter({ strict: true })
+        const router = RouterTestPermissionsEndPoints.router
         var idAdmin = null
         router.use((req: UserRequest, res, next) => {
             req.user = new user({ roles: [idAdmin] })
@@ -569,7 +572,7 @@ class RouterTestPermissionsEndPoints {
         const hasAdminPermission = (req, doc, callback) => {
             callback(null, true)
         }
-        router.setModel(`/${PROVIDER}`, RouterTestPermissionsEndPoints.provider, { hasAdminPermission })
+        RouterTestPermissionsEndPoints.schema = router.setModel(`/${PROVIDER}`, RouterTestPermissionsEndPoints.provider, { hasAdminPermission })
         router.setModel(`/${CUSTOMER}`, RouterTestPermissionsEndPoints.customer, { name: 'name', hasAdminPermission })
 
         app.use('/', router)
@@ -785,6 +788,19 @@ class RouterTestPermissionsEndPoints {
                 res.should.have.status(200);
                 res.body.should.be.a('array');
                 res.body.length.should.be.eql(2)
+                done();
+            });
+    }
+    @test("tree handle error from permissions")
+    public getTreeHandleError(done) {
+        const p = RouterTestPermissionsEndPoints.schema.getMaxPermission
+        RouterTestPermissionsEndPoints.schema.getMaxPermission = (err, cb)=>cb('error')
+        chai.request(RouterTestPermissionsEndPoints.server)
+            .get('/tree')
+            .end((err, res) => {
+                RouterTestPermissionsEndPoints.schema.getMaxPermission = p
+                if (err) return done(err)
+                res.should.have.status(500);
                 done();
             });
     }

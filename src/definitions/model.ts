@@ -43,10 +43,12 @@ export type PermissionRequest<T extends Document> = EditRequest<T> & {
     role: PermissionEnum
 }
 
-type RequestFilterQuery = (req: Request, callback: (error: Error | null, query: { [key: string]: any }) => void) => void
-type EditPermision = (req: Request, doc: Document, callback: HasPermissionCallback) => void
-type AddPermision = (req: Request, callback: HasPermissionCallback) => void
-export type PermissionChecks = {
+type RequestFilterQuery = (req: UserRequest, callback: (error: Error | null, query: { [key: string]: any }) => void) => void
+type EditPermision = (req: UserRequest, doc: Document, callback: HasPermissionCallback) => void
+type AddPermision = (req: UserRequest, callback: HasPermissionCallback) => void
+type GlobalPermision = (req: UserRequest, callback: (error: Error | null, permission: PermissionEnum) => void) => void
+type GetMaxPermission = { getMaxPermission: GlobalPermision }
+type PermissionCallbacks = {
     getFilterByPermissions?: RequestFilterQuery,
     hasAdminPermission: EditPermision,
     hasEditPermission: EditPermision,
@@ -54,10 +56,11 @@ export type PermissionChecks = {
     hasUpdatePermission: EditPermision,
     hasDeletePermission: EditPermision,
 }
+export type PermissionChecks = PermissionCallbacks & GetMaxPermission
 export type ServeOptions = {
     MAX_RESULTS?: number,
     name?: string
-} & Partial<PermissionChecks>
+} & Partial<PermissionCallbacks>
 
 export type HasPermissionCallback = (error: Error | null, hasPermission: boolean, reason?: string) => void
 

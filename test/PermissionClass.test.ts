@@ -227,7 +227,7 @@ class PermissionClassTest {
         const user = new PermissionClassTest.user({ roles: [role] })
         const req: any = { user }
         const roleModel: any = {
-            find: (filter, cb) => {
+            aggregate: (filter, cb) => {
                 cb(new Error('some error'))
             }
         }
@@ -291,7 +291,7 @@ class PermissionClassTest {
     @test 'getReadQuery with 0 permission objects'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
         const req: any = { user }
-        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, {r:'the query'}) })
+        new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, { r: 'the query' }) })
             .getReadQuery(req, (err, query) => {
                 if (err) return done(err)
                 query.r.should.be.eql('the query')
@@ -445,7 +445,7 @@ class PermissionClassTest {
         const user = new PermissionClassTest.user({ roles: [role] })
         const req: any = { user }
         const roleModel: any = {
-            find: (filter, cb) => {
+            aggregate: (filter, cb) => {
                 cb(new Error('some error'))
             }
         }
@@ -572,7 +572,7 @@ class PermissionClassTest {
         const user = new PermissionClassTest.user({ roles: [role] })
         const req: any = { user }
         const roleModel: any = {
-            find: (filter, cb) => {
+            aggregate: (filter, cb) => {
                 cb(new Error('some error'))
             }
         }
@@ -667,7 +667,7 @@ class PermissionClassTest {
         const user = new PermissionClassTest.user({ roles: [role] })
         const req: any = { user }
         const roleModel: any = {
-            find: (filter, cb) => {
+            aggregate: (filter, cb) => {
                 cb(new Error('some error'))
             }
         }
@@ -795,7 +795,7 @@ class PermissionClassTest {
         const user = new PermissionClassTest.user({ roles: [role] })
         const req: any = { user }
         const roleModel: any = {
-            find: (filter, cb) => {
+            aggregate: (filter, cb) => {
                 cb(new Error('some error'))
             }
         }
@@ -851,6 +851,19 @@ class PermissionClassTest {
                 if (hasReadPermission) return done()
                 done('test failed')
             })
+        })
+    }
+    @test 'hasDeletePermission with role not found'(done) {
+        const user = new PermissionClassTest.user({ roles: [] })
+        const req: any = { user }
+        const doc = new PermissionClassTest.model({ string: 'string' })
+        const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
+        const role = new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] })
+        user.roles = [role._id]
+        perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
+            if (err) return done(err)
+            if (!hasReadPermission) return done()
+            done('test failed')
         })
     }
     @test 'hasDeletePermission without role'(done) {
@@ -922,7 +935,7 @@ class PermissionClassTest {
         const role = new PermissionClassTest.role({})
         const user = new PermissionClassTest.user({ roles: [role] })
         const roleModel: any = {
-            find: (filter, cb) => {
+            aggregate: (filter, cb) => {
                 cb(new Error('some error'))
             }
         }

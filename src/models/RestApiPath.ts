@@ -173,6 +173,7 @@ export default class RestApiPath<T extends Document> {
                     visited.push(el)
                 })
                 const labeledChild = newObject.children.find(child => child.label)
+                if (!labeledChild) this._warnLabel(newObject.name, { name: newObject.children[0].name, type: newObject.children[0].type })
                 newObjects.push({
                     ...newObject,
                     label: labeledChild ? labeledChild.name : undefined,
@@ -186,24 +187,30 @@ export default class RestApiPath<T extends Document> {
         return pathsWithoutObject.concat(newObjects)
     }
 
+    private _warnLabel(pathName: string, child: { name: string, type: string }) {
+        console.warn(`WARNING: ${this.infoModel.name}: One children of path "${pathName}" must have a flag with "label: true" for UI purpose.
+                    Suggestion: ${child.name}: {type: ${child.type}, label: true}\n\n`)
+    }
     private _getModelProperties(schema): Path[] {
         return this._transformPaths(Object.keys(schema.paths).map((key) => {
             const type = schema.paths[key].constructor.name
             if (type === 'SchemaType') {
                 const children = schema.paths[key].schema
                 const labels = Object.keys(children.paths).filter(el => children.paths[el].options.label)
-                return {
+                const path = {
                     name: key,
                     type: 'Object',
                     label: labels.length > 0 ? labels.shift() : undefined,
                     required: schema.requiredPaths(true).indexOf(key) >= 0,
                     children: this._getModelProperties(schema.paths[key].schema)
                 }
+                if (labels.length === 0) this._warnLabel(key, { name: path.children[0].name, type: path.children[0].type })
+                return path
             }
             if (type === 'DocumentArray') {
                 const children = schema.paths[key].schema
                 const labels = Object.keys(children.paths).filter(el => children.paths[el].options.label)
-                return {
+                const path = {
                     name: key,
                     type: 'Array',
                     complex: true,
@@ -211,6 +218,8 @@ export default class RestApiPath<T extends Document> {
                     required: schema.requiredPaths(true).indexOf(key) >= 0,
                     children: this._getModelProperties(schema.paths[key].schema)
                 }
+                if (labels.length === 0) this._warnLabel(key, { name: path.children[0].name, type: path.children[0].type })
+                return path
             }
             if (type === 'ObjectId' && schema.paths[key].options.ref !== undefined) {
                 return {
@@ -296,10 +305,13 @@ export default class RestApiPath<T extends Document> {
 
     private _addPermission(req: UserRequest, Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
         const table = this.model.modelName
-        if (!Permission) return callback(null)
+        if (!Permission) {
+            return callback(null)
+        }
         let p = new Permission({ table, object, user: req.user._id, permission: PermissionEnum.DELETE })
         p.save(callback)
     }
+
     private _deletePermission(Permission: Model<IPermission>, object: Types.ObjectId, callback: (err: Error) => void) {
         const table = this.model.modelName
         if (Permission) return Permission.deleteMany({ table, object }, callback)
@@ -362,18 +374,20 @@ export default class RestApiPath<T extends Document> {
                         if (err) return res.status(500).send(err.message)
                         const page = $page ? $page : 1
                         const rowsPerPage = $rowsPerPage ? parseInt($rowsPerPage) : this.MAX_RESULTS
+                        let sort = null
                         if ($sortBy) {
                             if (Array.isArray($sortBy)) {
-                                cursor = cursor.sort($sortBy.map((field, key) => ({
+                                sort = $sortBy.map((field, key) => ({
                                     field,
                                     direction: $sort && Array.isArray($sort) ? $sort[key] ? $sort[key] : 1 : $sort ? $sort : 1
                                 })).reduce((el: any, next) => {
                                     el[next.field] = next.direction
                                     return el
-                                }, {}))
+                                }, {})
                             } else {
-                                cursor = cursor.sort({ [$sortBy]: $sort ? Array.isArray($sort) ? $sort.pop() : $sort : 1 })
+                                sort = { [$sortBy]: $sort ? Array.isArray($sort) ? $sort.pop() : $sort : 1 }
                             }
+                            cursor = cursor.sort(sort)
                         }
                         cursor
                             .skip((parseInt(page) - 1) * rowsPerPage)
@@ -383,8 +397,9 @@ export default class RestApiPath<T extends Document> {
                                 return res.send({
                                     total_pages: Math.ceil(count / rowsPerPage),
                                     page,
-                                    count,
-                                    results
+                                    count, 
+                                    sort,
+                                    results,
                                 })
                             })
                     })

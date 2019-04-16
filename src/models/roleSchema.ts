@@ -10,9 +10,9 @@ export type IRole = {
 } & Document
 const roleSchema = new Schema({
     name: { type: String, required: true },
-    schemas: [{ 
-        name: {type: String, required: true},
-        permission: {type: Number, required: true}
+    schemas: [{
+        name: { type: String, required: true },
+        permission: { type: Number, required: true }
     }]
 })
 export default roleSchema
