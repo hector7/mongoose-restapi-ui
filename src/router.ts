@@ -27,10 +27,10 @@ function ApiRouter(options = { isMongo4: false }): ApiRouter {
     const router: ApiRouter = Router(routerOptions)
     let permissionModel: Model<IPermission> = null
     let roleModel: Model<IRole> = null
-    let globalRoute = '/'
+    let globalRoute = ''
     router.roleModel = () => roleModel
     router.setGlobalRoute = (path: string) => {
-        globalRoute = path
+        globalRoute = path.endsWith('/') ? path.slice(0, -1) : path
     }
     router.setConnection = (connection: Connection) => {
         permissionModel = connection.model<IPermission>(PERMISSION_MODEL, permissionSchema)
@@ -50,7 +50,7 @@ function ApiRouter(options = { isMongo4: false }): ApiRouter {
                 models[key].emitter.getMaxPermission(req, (err, perm) => {
                     if (err) return response.status(500).send(err.message)
                     map.push({ ...models[key].infoModel, perm })
-                    if(map.length === target){
+                    if (map.length === target) {
                         response.send(map)
                     }
                 })

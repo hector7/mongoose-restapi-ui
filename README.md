@@ -43,12 +43,19 @@ app.get('/api/ui', router.publishUiTree())
 ### (NEW) Use permissions and roles
 The library needs to pass your mongoose connection, and a middleware in order to get the user. Here an example:
 
+Typescript:
 ```js
+import * as express from 'express'
 import { ApiRouter } from 'mongoose-restapi-ui'
+import { model, Schema, connect } from 'mongoose'
+
+connect('mongodb://localhost:27017/dummyDatabase')
 const customer = model('Customer', new Schema({
     name: { type: String, required: true },
     comment: { type: String }
 }))
+const app = express()
+const router = ApiRouter()
 router.use((req, res, next)=>{
     req.user = // your mongoose user document....
     next()
@@ -56,6 +63,32 @@ router.use((req, res, next)=>{
 router.setModel('/customer', customer)
 router.setConnection(mongoose) // or object returned from mongoose.connect
 app.use('/', router)
+app.listen(3000)
+```
+
+Javascript:
+```js
+const express = require('express')
+const { model, Schema, connect } = require('mongoose')
+const { ApiRouter } = require('mongoose-restapi-ui')
+
+connect('mongodb://localhost:27017/dummyDatabase')
+
+const customer = model('Customer', new Schema({
+    name: { type: String, required: true },
+    comment: { type: String }
+}))
+
+const app = express()
+const router = ApiRouter()
+router.use((req, res, next)=>{
+    req.user = // your mongoose user document....
+    next()
+})
+router.setModel('/customer', customer)
+router.setConnection(mongoose) // or object returned from mongoose.connect
+app.use('/', router)
+app.listen(3000)
 ```
 
 ## UI integration

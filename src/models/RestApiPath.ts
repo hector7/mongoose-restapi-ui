@@ -397,7 +397,7 @@ export default class RestApiPath<T extends Document> {
                                 return res.send({
                                     total_pages: Math.ceil(count / rowsPerPage),
                                     page,
-                                    count, 
+                                    count,
                                     sort,
                                     results,
                                 })
