@@ -1,7 +1,7 @@
 import { Request } from 'express'
 import { Document, Model } from 'mongoose';
 import { IPermission } from '../models/permissionSchema';
-import { SchemaRolePermission } from '../models/roleSchema';
+import { SchemaRolePermission, IRole } from '../models/roleSchema';
 import { IUser } from '../models/userSchema';
 
 type RequiredAttrsPath = {
@@ -35,6 +35,9 @@ export type EditRequest<T extends Document> = UserRequest & {
 }
 export type EditPermRequest<T extends Document> = EditRequest<T> & {
     doc_perm: IPermission
+}
+export type RolePermRequest = UserRequest & {
+    role: IRole
 }
 
 export type PermissionRequest<T extends Document> = EditRequest<T> & {

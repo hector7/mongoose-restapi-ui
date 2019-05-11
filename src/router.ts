@@ -5,7 +5,7 @@ import { RequestHandler, RouterOptions } from 'express'
 import { ServeOptions, PERMISSION_MODEL, ROLE_MODEL, PermissionChecks, InfoModel, UserRequest } from './definitions/model'
 import permissionSchema, { IPermission } from './models/permissionSchema'
 
-import serveApi from './controllers/model'
+import serveApi, { setRoleEndpoints } from './controllers/model'
 
 import { EventEmitter } from 'events';
 import roleSchema, { IRole } from './models/roleSchema';
@@ -15,6 +15,7 @@ type ApiRouter = Router & {
     roleModel?: () => Model<IRole>
     setModel?: (path: string, Model: Model<any>, ServeOptions?: ServeOptions) => EventEmitter & PermissionChecks
     publishUiTree?: () => RequestHandler
+    setRoleEndpoints?: (path?: string) => void
     setGlobalRoute?: (string: string) => void
     setConnection?: (connection: Connection) => void
 }
@@ -30,6 +31,7 @@ function ApiRouter(options = { isMongo4: false }): ApiRouter {
     let globalRoute = ''
     router.roleModel = () => roleModel
     router.setGlobalRoute = (path: string) => {
+        if (!path.startsWith('/')) console.error('Please, provide a valid path (must be start with slash "/")')
         globalRoute = path.endsWith('/') ? path.slice(0, -1) : path
     }
     router.setConnection = (connection: Connection) => {
@@ -41,6 +43,9 @@ function ApiRouter(options = { isMongo4: false }): ApiRouter {
         infoModel.route = `${globalRoute}${route}`
         models[infoModel.name] = { infoModel, emitter }
         return emitter
+    }
+    router.setRoleEndpoints = (route = '/roles') => {
+        return setRoleEndpoints(router, route, roleModel)
     }
     router.publishUiTree = () => {
         return (req: UserRequest, response) => {

@@ -9,6 +9,10 @@ import { IRole } from '../models/roleSchema';
 type RichEmitter = EventEmitter & PermissionChecks
 type returnFunction = { infoModel: InfoModel, emitter: RichEmitter }
 
+export function setRoleEndpoints(router: Router, route: string, roleModel: Model<IRole>) {
+    return RestApiPath.setRoleEndpoints(router, route.endsWith('/') ? route.slice(0, -1) : route, roleModel)
+}
+
 export default function <T extends Document>(router: Router, route: string, model: Model<T>,
     models: any, permissionModel: Model<IPermission>, roleModel: Model<IRole>, userOptions: ServeOptions, isMongo4: boolean): returnFunction {
     const path = new RestApiPath<T>(router, route, model, userOptions, isMongo4)

@@ -5,7 +5,6 @@ import roleSchema, { IRole } from "../src/models/roleSchema";
 import PermissionClass from "../src/models/PermissionClass";
 import { IUser } from "../src/models/userSchema";
 import { PermissionEnum } from "../src/definitions/model";
-import { doesNotReject } from "assert";
 const mongoose = require("mongoose");
 
 @suite('Permission Class test')
@@ -141,7 +140,7 @@ class PermissionClassTest {
     @test '_getUserRoles function with 1 roles'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
         const req: any = { user }
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 's_1_roles', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
@@ -155,9 +154,9 @@ class PermissionClassTest {
     @test '_getUserRoles function with +1 roles'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
         const req: any = { user }
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 's_plus_1_role_update', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
-            new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.READ }] }).save((err, role2) => {
+            new PermissionClassTest.role({ name: 's_plus_1_role', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.READ }] }).save((err, role2) => {
                 if (err) return done(err)
                 user.roles = [role._id, role2._id]
                 new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
@@ -172,9 +171,9 @@ class PermissionClassTest {
     @test '_getUserRoles function with +1 roles descendant'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
         const req: any = { user }
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 's_plus_1_role_descendant', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
-            new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role2) => {
+            new PermissionClassTest.role({ name: 's_plus_1_role_descendant_ADMIN', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role2) => {
                 if (err) return done(err)
                 user.roles = [role._id, role2._id]
                 new PermissionClass(PermissionClassTest.model, null, PermissionClassTest.role, { getFilterByPermissions: (a, cb) => cb(null, null) })
@@ -240,7 +239,7 @@ class PermissionClassTest {
     @test 'getReadQuery with a role > READ'(done) {
         const user = new PermissionClassTest.user({ roles: [] })
         const req: any = { user }
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 's_role_read>', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             new PermissionClass(PermissionClassTest.model, null, null, { getFilterByPermissions: (a, cb) => cb(null, null) })
@@ -479,7 +478,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 's_1_role_readper', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasReadPermission(req, doc, (err, hasReadPermission) => {
@@ -588,7 +587,7 @@ class PermissionClassTest {
         const user = new PermissionClassTest.user({ roles: [] })
         const req: any = { user }
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADD }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'add_role', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADD }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasAddPermission(req, (err, hasReadPermission) => {
@@ -602,7 +601,7 @@ class PermissionClassTest {
         const user = new PermissionClassTest.user({ roles: [] })
         const req: any = { user }
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'no_role_add', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasAddPermission(req, (err, hasReadPermission) => {
@@ -715,7 +714,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'update_role', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.UPDATE }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasUpdatePermission(req, doc, (err, hasReadPermission) => {
@@ -730,7 +729,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'update_no_role', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasUpdatePermission(req, doc, (err, hasReadPermission) => {
@@ -843,7 +842,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'delete_role', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
@@ -858,7 +857,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        const role = new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] })
+        const role = new PermissionClassTest.role({ name: 'delete_role_not_found', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] })
         user.roles = [role._id]
         perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
             if (err) return done(err)
@@ -871,7 +870,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'delete_no_role', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasDeletePermission(req, doc, (err, hasReadPermission) => {
@@ -984,7 +983,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'admin_role___', schemas: [{ name: PermissionClassTest.model.modelName, permission: PermissionEnum.ADMIN }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasAdminPermission(req, doc, (err, hasReadPermission) => {
@@ -999,7 +998,7 @@ class PermissionClassTest {
         const req: any = { user }
         const doc = new PermissionClassTest.model({ string: 'string' })
         const perm = new PermissionClass(PermissionClassTest.model, PermissionClassTest.permission, PermissionClassTest.role, {})
-        new PermissionClassTest.role({ name: 's', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
+        new PermissionClassTest.role({ name: 'admin_no_role', schemas: [{ name: PermissionClassTest.model.modelName, permission: 0 }] }).save((err, role) => {
             if (err) return done(err)
             user.roles = [role._id]
             perm.hasAdminPermission(req, doc, (err, hasReadPermission) => {

@@ -9,7 +9,7 @@ export type IRole = {
     schemas: SchemaRolePermission[]
 } & Document
 const roleSchema = new Schema({
-    name: { type: String, required: true },
+    name: { type: String, required: true, unique: true },
     schemas: [{
         name: { type: String, required: true },
         permission: { type: Number, required: true }

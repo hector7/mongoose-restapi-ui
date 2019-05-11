@@ -186,15 +186,9 @@ describe('SimpleQueryTest', () => {
     })
     after(function (done) {
         this.timeout(10000)
-        Customer.remove((error) => {
-            if (error) return done(error)
-            Provider.remove((error) => {
-                if (error) return done(error)
-                EmptyModel.remove((error) => {
-                    if (error) return done(error)
-                    connection.close().then(() => done()).catch(done)
-                })
-            })
+        connection.dropDatabase((err) => {
+            if (err) return done(err)
+            connection.close().then(() => done()).catch(done)
         })
     })
 

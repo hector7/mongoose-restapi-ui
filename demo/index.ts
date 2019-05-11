@@ -24,33 +24,34 @@ const customer = mongoose.model('Customer', new mongoose.Schema({
 const provider = mongoose.model('Provider', new mongoose.Schema({
     name: {
         type: [{ hola: { type: String, required: true, label: true }, adios: { type: String, required: true } }],
-        required: true,
+        required: true
     },
     complex: {
         label: { type: String, label: true }
     },
     complexArrayRef: [{
         name: String,
-        customer: {ref: 'Customer', type: mongoose.Schema.Types.ObjectId, label: true }
+        customer: { ref: 'Customer', type: mongoose.Schema.Types.ObjectId, label: true }
     }],
     customer: [{
         ref: 'Customer', type: mongoose.Schema.Types.ObjectId
     }],
     comment: { type: String }
 }))
-const user = mongoose.model('User', new mongoose.Schema({
+const User = mongoose.model('User', new mongoose.Schema({
     name: String,
+    super_admin: Boolean,
     roles: [mongoose.Schema.Types.ObjectId]
 }))
-const userId = new user()
+const userId = new User({ super_admin: true })
 app.use((req, res, next) => {
     req.user = userId
     next()
 })
-router.setGlobalRoute('')
-//router.setConnection(mongoose)
+router.setConnection(mongoose)
 router.setModel('/customer', customer, { name: 'name', hasAddPermission: (req, cb) => cb(null, true) })
 router.setModel('/provider', provider, { hasAddPermission: (req, cb) => cb(null, true) })
+router.setRoleEndpoints()
 app.use('/', router)
 app.get('/tree', router.publishUiTree())
 app.listen(3030, () => {

@@ -1,7 +1,7 @@
 import { Model, SchemaType, Document, DocumentQuery, Types } from 'mongoose';
 import { Router, Request, Response } from 'express'
 import { EventEmitter } from 'events';
-import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath, PermissionRequest, EditRequest, UserRequest, PermissionEnum, EditPermRequest } from '../definitions/model'
+import { HasPermissionCallback, ServeOptions, FullPathTypes, Path, InfoModel, ObjectPath, PermissionRequest, EditRequest, UserRequest, PermissionEnum, EditPermRequest, RolePermRequest } from '../definitions/model'
 import * as utils from '../utils'
 import getQuery from './query'
 import { IPermission } from './permissionSchema';
@@ -318,10 +318,9 @@ export default class RestApiPath<T extends Document> {
         callback(null)
     }
 
-    public setEndPoints(models, Permission: Model<IPermission>, Role: Model<IRole>) {
-        const permission = new PermissionClass(this.model, Permission, Role, this.options)
-        const table = this.model.modelName
-        this.router.use(this.route, (req, res, next) => {
+    public static setRoleEndpoints(router: Router, route: string, Role: Model<IRole>) {
+        router.use(`${route === '' ? '/' : route}`, (req, res, next) => {
+            if (req.method === 'GET' || req.method === 'DELETE') return next()
             if (req.body) return next()
             let data = ''
             req.on('data', (chunk) => {
@@ -332,7 +331,89 @@ export default class RestApiPath<T extends Document> {
                     req.body = JSON.parse(data)
                     next()
                 } catch (err) {
+                    res.status(400).send('Body is not a valid json.')
+                }
+            })
+        })
+        router.use(`${route === '' ? '/' : route}`, (req: UserRequest, res: Response, next) => {
+            if (req.user.super_admin) return next()
+            res.status(403).send()
+        })
+
+        router.get(`${route === '' ? '/' : route}`, (req: UserRequest, res: Response) => {
+            Role.find({}, (err, docs) => {
+                if (err) return res.status(500).send(err.message)
+                res.send(docs)
+            })
+        })
+
+        router.post(`${route === '' ? '/' : route}`, (req: RolePermRequest, res: Response) => {
+            const permission = new Role(req.body)
+            permission.save((err) => {
+                if (err) return res.status(500).send(err.message)
+                res.status(201).send(permission)
+            })
+        })
+
+        router.use(`${route.endsWith('/') ? route.slice(0, -1) : route}/:role`, (req: RolePermRequest, res: Response, next) => {
+            Role.findById(req.params.role, (err, doc) => {
+                if (err) return Role.findOne({ name: req.params.role }, (err, doc) => {
+                    if (err) return res.status(500).send(err.message)
+                    if (!doc) return res.status(404).send('Not found')
+                    req.role = doc
                     next()
+                })
+                req.role = doc
+                next()
+            })
+        })
+        router.get(`${route.endsWith('/') ? route.slice(0, -1) : route}/:role`, (req: RolePermRequest, res: Response) => {
+            res.send(req.role)
+        })
+
+        router.put(`${route.endsWith('/') ? route.slice(0, -1) : route}/:role`, (req: RolePermRequest, res: Response) => {
+            req.role.name = req.body.name
+            req.role.schemas = req.body.schemas
+            req.role.save((err) => {
+                if (err) return res.status(500).send(err.message)
+                res.status(200).send(req.body)
+            })
+        })
+
+        router.patch(`${route.endsWith('/') ? route.slice(0, -1) : route}/:role`, (req: RolePermRequest, res: Response) => {
+            if (req.body.name) req.role.name = req.body.name
+            if (req.body.schemas) req.role.schemas = req.body.schemas
+            req.role.save((err) => {
+                if (err) return res.status(500).send(err.message)
+                res.status(200).send(req.role)
+            })
+        })
+
+        router.delete(`${route.endsWith('/') ? route.slice(0, -1) : route}/:role`, (req: RolePermRequest, res: Response) => {
+            req.role.remove((err) => {
+                if (err) return res.status(500).send(err.message)
+                res.send(req.role)
+            })
+        })
+        return router
+    }
+
+    public setEndPoints(models, Permission: Model<IPermission>, Role: Model<IRole>) {
+        const permission = new PermissionClass(this.model, Permission, Role, this.options)
+        const table = this.model.modelName
+        this.router.use(this.route, (req, res, next) => {
+            if (req.method === 'GET' || req.method === 'DELETE') return next()
+            if (req.body) return next()
+            let data = ''
+            req.on('data', (chunk) => {
+                data += chunk.toString()
+            })
+            req.on('end', () => {
+                try {
+                    req.body = JSON.parse(data)
+                    next()
+                } catch (err) {
+                    res.status(400).send('Body is not a valid json.')
                 }
             })
         })
@@ -414,7 +495,6 @@ export default class RestApiPath<T extends Document> {
             })
         });
         this.router.post(`${this.route}`, (req: PermissionRequest<T>, res: Response) => {
-            if (!req.body) return res.status(400).send('Body is empty')
             let item = new this.model(req.body)
             utils.replaceObjectIds(this.paths, item)
             permission.hasAddPermission(req, (err, hasPermission, message) => {
@@ -434,7 +514,6 @@ export default class RestApiPath<T extends Document> {
             })
         });
         this.router.put(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            if (!req.body) return res.status(400).send('Body is empty')
             const oldItem = req.doc.toObject()
             permission.hasUpdatePermission(req, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
@@ -457,7 +536,6 @@ export default class RestApiPath<T extends Document> {
             });
         });
         this.router.patch(`${this.route}/:id`, (req: PermissionRequest<T>, res: Response) => {
-            if (!req.body) return res.status(400).send('body is empty')
             const oldItem = req.doc.toObject()
             permission.hasUpdatePermission(req, req.doc, (err, hasPermission, message) => {
                 if (err) return res.status(500).send(err.message);
@@ -560,6 +638,7 @@ export default class RestApiPath<T extends Document> {
                 res.send(req.doc_perm)
             })
         })
+
         return permission
     }
 }

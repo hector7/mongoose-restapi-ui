@@ -76,14 +76,11 @@ class RouterTest {
         done()
     }
     public static after(done) {
-        RouterTest.customer.remove((error) => {
+        RouterTest.connection.dropDatabase((error) => {
             if (error) return done(error)
-            RouterTest.provider.remove((error) => {
+            RouterTest.connection.close((error) => {
                 if (error) return done(error)
-                RouterTest.connection.close((error) => {
-                    if (error) return done(error)
-                    done(error)
-                })
+                done(error)
             })
         })
     }
@@ -284,7 +281,7 @@ class RouterTestPermissions {
         //use q library for mongoose promise
         mongoose.Promise = global.Promise;
 
-        const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_router";
+        const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_router_permissions";
         RouterTestPermissions.connection = mongoose.createConnection(MONGODB_CONNECTION);
         const customerSchema = new mongoose.Schema({
             name: String,
@@ -334,14 +331,11 @@ class RouterTestPermissions {
         })
     }
     public static after(done) {
-        RouterTestPermissions.customer.remove((error) => {
-            if (error) return done(error)
-            RouterTestPermissions.provider.remove((error) => {
+        RouterTestPermissions.connection.dropDatabase((err) => {
+            if (err) return done(err)
+            RouterTestPermissions.connection.close((error) => {
                 if (error) return done(error)
-                RouterTestPermissions.connection.close((error) => {
-                    if (error) return done(error)
-                    done(error)
-                })
+                done(error)
             })
         })
     }
@@ -544,7 +538,7 @@ class RouterTestPermissionsEndPoints {
         //use q library for mongoose promise
         mongoose.Promise = global.Promise;
 
-        const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_router";
+        const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_router_permissions_endpoints";
         RouterTestPermissionsEndPoints.connection = mongoose.createConnection(MONGODB_CONNECTION);
         const customerSchema = new mongoose.Schema({
             name: String,
@@ -597,14 +591,11 @@ class RouterTestPermissionsEndPoints {
         })
     }
     public static after(done) {
-        RouterTestPermissionsEndPoints.customer.remove((error) => {
+        RouterTestPermissionsEndPoints.connection.dropDatabase((error) => {
             if (error) return done(error)
-            RouterTestPermissionsEndPoints.provider.remove((error) => {
+            RouterTestPermissionsEndPoints.connection.close((error) => {
                 if (error) return done(error)
-                RouterTestPermissionsEndPoints.connection.close((error) => {
-                    if (error) return done(error)
-                    done(error)
-                })
+                done(error)
             })
         })
     }
@@ -794,7 +785,7 @@ class RouterTestPermissionsEndPoints {
     @test("tree handle error from permissions")
     public getTreeHandleError(done) {
         const p = RouterTestPermissionsEndPoints.schema.getMaxPermission
-        RouterTestPermissionsEndPoints.schema.getMaxPermission = (err, cb)=>cb('error')
+        RouterTestPermissionsEndPoints.schema.getMaxPermission = (err, cb) => cb('error')
         chai.request(RouterTestPermissionsEndPoints.server)
             .get('/tree')
             .end((err, res) => {
@@ -803,5 +794,204 @@ class RouterTestPermissionsEndPoints {
                 res.should.have.status(500);
                 done();
             });
+    }
+}
+@suite
+class RouterTestRoleEndPoints {
+    public static id: any
+    public static customerRef
+    public static connection: Connection
+    public static server: any
+    public static server2: any
+    public static router: ApiRouter
+    public static schema: any
+    public static customer: Model<any>
+    public static provider: Model<any>
+
+    public static before(done) {
+        const app = express()
+        const app2 = express()
+        app.use(bodyParser.json())
+        global.Promise = require("q").Promise;
+
+        //use q library for mongoose promise
+        mongoose.Promise = global.Promise;
+
+        const MONGODB_CONNECTION: string = "mongodb://localhost:27017/test_mongoose_api_ui_router_role";
+        RouterTestRoleEndPoints.connection = mongoose.createConnection(MONGODB_CONNECTION);
+        const customerSchema = new mongoose.Schema({
+            name: String,
+            number: Number,
+            boolean: Boolean,
+            date: Date,
+            objectid: mongoose.Schema.Types.ObjectId
+        })
+        const providerSchema = new mongoose.Schema({
+            ref: { type: mongoose.Schema.Types.ObjectId, ref: CUSTOMER }
+        })
+        const User = RouterTestRoleEndPoints.connection.model<IUser>('User', userSchema)
+        RouterTestRoleEndPoints.customer = RouterTestRoleEndPoints.connection.model(CUSTOMER, customerSchema);
+        RouterTestRoleEndPoints.provider = RouterTestRoleEndPoints.connection.model(PROVIDER, providerSchema);
+
+        RouterTestRoleEndPoints.router = ApiRouter({ strict: true })
+        const router = RouterTestRoleEndPoints.router
+        var idAdmin = null
+        router.setConnection(RouterTestRoleEndPoints.connection)
+        router.setGlobalRoute('')
+        router.setGlobalRoute('/')
+        RouterTestRoleEndPoints.schema = router.setModel(`/${PROVIDER}`, RouterTestRoleEndPoints.provider)
+        router.setModel(`/${CUSTOMER}`, RouterTestRoleEndPoints.customer, { name: 'name' })
+
+        app.use((req: UserRequest, res, next) => {
+            req.user = new User({ roles: [idAdmin], super_admin: true })
+            req.user.super_admin = true
+            next()
+        })
+        app2.use((req: UserRequest, res, next) => {
+            req.user = new User({ roles: [idAdmin], super_admin: false })
+            next()
+        })
+        app2.use('/', router)
+        app.use('/', router)
+        router.setRoleEndpoints('/roles2/')
+        router.setRoleEndpoints()
+        app.get('/tree', router.publishUiTree())
+        const RoleModel = router.roleModel()
+        new RoleModel({
+            name: 'admin', schemas: [{
+                name: RouterTestRoleEndPoints.provider.modelName,
+                permission: PermissionEnum.ADMIN
+            }, {
+                name: RouterTestRoleEndPoints.customer.modelName,
+                permission: PermissionEnum.ADMIN
+            }]
+        }).save((err, doc) => {
+            if (err) return done(err)
+            idAdmin = doc._id
+            RouterTestRoleEndPoints.server = app
+            RouterTestRoleEndPoints.server2 = app2
+            let chaiHttp = require('chai-http');
+            chai.use(chaiHttp)
+            chai.should();
+            done()
+        })
+    }
+    public static after(done) {
+        RouterTestRoleEndPoints.connection.dropDatabase((err) => {
+            if (err) return done(err)
+            RouterTestRoleEndPoints.connection.close((error) => {
+                if (error) return done(error)
+                done(error)
+            })
+        })
+    }
+    @test("should get unauth")
+    public getAllCustomerObjectsWithoutAuth(done) {
+        chai.request(RouterTestRoleEndPoints.server2)
+            .get(`/roles`)
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(403)
+                done()
+            })
+    }
+    @test("should get all role objects")
+    public getAllCustomerObjects(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .get(`/roles`)
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(200)
+                res.body.should.be.a('array')
+                done()
+            })
+    }
+    @test("should post a role")
+    public postRole(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .post(`/roles`)
+            .send({ name: 'roleTest', schemas: [] })
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(201)
+                done()
+            })
+    }
+    @test("should get 404 not found")
+    public getRoleNotFound(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .get(`/roles/roleTest_not_found`)
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(404)
+                done()
+            })
+    }
+    @test("should get a role")
+    public getSpecificRole(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .get(`/roles/roleTest`)
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(200)
+                RouterTestRoleEndPoints.id = res.body._id
+                done()
+            })
+    }
+    @test("should get a role by id")
+    public getSpecificRoleId(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .get(`/roles/${RouterTestRoleEndPoints.id}`)
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(200)
+                done()
+            })
+    }
+    @test("should update a role by id")
+    public updateSpecificRoleId(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .put(`/roles/${RouterTestRoleEndPoints.id}`)
+            .send({ name: 'pepito' })
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(200)
+                done()
+            })
+    }
+    @test("should change name of role by id")
+    public patchSpecificRoleId(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .patch(`/roles/${RouterTestRoleEndPoints.id}`)
+            .send({ name: 'pepito' })
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(200)
+                res.body.name.should.be.eql('pepito')
+                done()
+            })
+    }
+    @test("should change name of role by id")
+    public patchSchemasSpecificRoleId(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .patch(`/roles/${RouterTestRoleEndPoints.id}`)
+            .send({ schemas: [{ name: 'pepe', permission: 0 }] })
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(200)
+                res.body.schemas.should.be.a('array')
+                res.body.schemas.length.should.be.eql(1)
+                done()
+            })
+    }
+    @test("should remove a role")
+    public removeSpecificRole(done) {
+        chai.request(RouterTestRoleEndPoints.server)
+            .delete(`/roles/${RouterTestRoleEndPoints.id}`)
+            .end((err, res) => {
+                if (err) return done(err)
+                res.should.have.status(200)
+                done()
+            })
     }
 }

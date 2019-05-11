@@ -9,6 +9,7 @@ import permissionSchema, { IPermission } from "../src/models/permissionSchema";
 import { UserRequest } from "../src/definitions/model";
 import roleSchema, { IRole } from "../src/models/roleSchema";
 import { isNull } from "util";
+import bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 
 let chai = require('chai')
@@ -1026,7 +1027,7 @@ class RestApiPathTest {
             const server = app.listen(3003, () => {
                 chai.request(server)
                     .put(`/test/${RestApiPathTest.id}`)
-                    .send('')
+                    .send('{}')
                     .end((err, res) => {
                         objectTest.getItem = originalGetItem
                         server.close((err) => {
@@ -1107,7 +1108,7 @@ class RestApiPathTest {
             const server = app.listen(3003, () => {
                 chai.request(server)
                     .put(`/test/1`)
-                    .send('')
+                    .send('{}')
                     .end((err, res) => {
                         server.close((err) => {
                             res.should.have.status(404)
@@ -1181,7 +1182,7 @@ class RestApiPathTest {
             const server = app.listen(3003, () => {
                 chai.request(server)
                     .patch(`/test/${RestApiPathTest.id}`)
-                    .send('')
+                    .send('{}')
                     .end((err, res) => {
                         objectTest.getItem = originalGetItem
                         server.close((err) => {
@@ -1245,7 +1246,7 @@ class RestApiPathTest {
             const server = app.listen(3003, () => {
                 chai.request(server)
                     .patch(`/test/1`)
-                    .send('')
+                    .send('{}')
                     .end((err, res) => {
                         server.close((err) => {
                             res.should.have.status(404)
@@ -2157,5 +2158,188 @@ class RestApiPathPermissionRootTest {
                     })
                 })
         })
+    }
+}
+
+
+@suite('Permission Class role error handling')
+class PermissionClassRoleUTTest {
+    @test 'get handling error'(done) {
+        const router = express.Router()
+        router.use((req: any, res, next) => {
+            req.user = { super_admin: true }
+            next()
+        })
+        const Role: any = {
+            find: (arg, cb) => {
+                cb(new Error('some error'))
+            }
+        }
+        RestApiPath.setRoleEndpoints(router, '', Role)
+        const app = express()
+        app.use(router)
+        chai.request(app)
+            .get('/')
+            .end((err, res) => {
+                res.should.have.status(500)
+                done()
+            })
+    }
+    @test 'post handling error'(done) {
+        const router = express.Router()
+        router.use((req: any, res, next) => {
+            req.user = { super_admin: true }
+            next()
+        })
+        class Role {
+            constructor(body) {
+
+            }
+            save(cb) {
+                cb(new Error('some error'))
+            }
+        }
+        RestApiPath.setRoleEndpoints(router, '/', <any>Role)
+        const app = express()
+        app.use(router)
+        chai.request(app)
+            .post('/')
+            .send('{}')
+            .end((err, res) => {
+                res.should.have.status(500)
+                done()
+            })
+    }
+    @test 'get specific role error'(done) {
+        const router = express.Router()
+        router.use((req: any, res, next) => {
+            req.user = { super_admin: true }
+            next()
+        })
+        const Role: any = {
+            findOne: (arg, cb) => {
+                cb(new Error('some error'))
+            },
+            findById: (arg, cb) => {
+                cb(new Error('some error'))
+            }
+        }
+        RestApiPath.setRoleEndpoints(router, '/roles', Role)
+        const app = express()
+        app.use(router)
+        chai.request(app)
+            .get('/roles/jeje ')
+            .end((err, res) => {
+                res.should.have.status(500)
+                done()
+            })
+    }
+    @test 'update error'(done) {
+        const router = express.Router()
+        router.use((req: any, res, next) => {
+            req.user = { super_admin: true }
+            next()
+        })
+        class Role {
+            constructor() {
+
+            }
+            save(cb) {
+                cb(new Error('some error'))
+            }
+        }
+        const Role1: any = {
+            findById: (arg, cb) => {
+                cb(null, new Role())
+            }
+        }
+        RestApiPath.setRoleEndpoints(router, '/', <any>Role1)
+        const app = express()
+        app.use(router)
+        chai.request(app)
+            .put('/jeje')
+            .send({ name: 3 })
+            .end((err, res) => {
+                console.log(res.body)
+                res.should.have.status(500)
+                done()
+            })
+    }
+    @test 'patch error'(done) {
+        const router = express.Router()
+        router.use(bodyParser.json())
+        router.use((req: any, res, next) => {
+            req.user = { super_admin: true }
+            next()
+        })
+        class Role {
+            constructor() {
+
+            }
+            save(cb) {
+                cb(new Error('some error'))
+            }
+        }
+        const Role1: any = {
+            findById: (arg, cb) => {
+                cb(null, new Role())
+            }
+        }
+        RestApiPath.setRoleEndpoints(router, '/', <any>Role1)
+        const app = express()
+        app.use(router)
+        chai.request(app)
+            .patch('/jeje')
+            .send({ name: 3 })
+            .end((err, res) => {
+                console.log(res.body)
+                res.should.have.status(500)
+                done()
+            })
+    }
+    @test 'delete error'(done) {
+        const router = express.Router()
+        router.use((req: any, res, next) => {
+            req.user = { super_admin: true }
+            next()
+        })
+        class Role {
+            constructor() {
+
+            }
+            remove(cb) {
+                cb(new Error('some error'))
+            }
+        }
+        const Role1: any = {
+            findById: (arg, cb) => {
+                cb(null, new Role())
+            }
+        }
+        RestApiPath.setRoleEndpoints(router, '/', <any>Role1)
+        const app = express()
+        app.use(router)
+        chai.request(app)
+            .delete('/jeje')
+            .end((err, res) => {
+                res.should.have.status(500)
+                done()
+            })
+    }
+    @test 'handle json error'(done) {
+        const router = express.Router()
+        router.use((req: any, res, next) => {
+            req.user = { super_admin: true }
+            next()
+        })
+        RestApiPath.setRoleEndpoints(router, '/', <any>null)
+        const app = express()
+        app.use(router)
+        chai.request(app)
+            .post('/jeje')
+            .end((err, res) => {
+                res.should.have.status(400)
+                done()
+            })
     }
 }
