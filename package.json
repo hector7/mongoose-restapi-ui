@@ -1,6 +1,6 @@
 {
   "name": "mongoose-restapi-ui",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "license": "MIT",
   "description": "Rest api library for your mongoose apps, with react ui: mongoose-restapi-ui-component react library",
   "main": "src/router.js",
